@@ -1,0 +1,38 @@
+# Dependencies
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Next.js build output (built inside Docker)
+.next
+out
+
+# Dev / local files
+.DS_Store
+*.pem
+.env*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Git
+.git
+.gitignore
+
+# TypeScript build cache
+*.tsbuildinfo
+next-env.d.ts
+
+# Editor & OS
+.vscode
+.idea
+scratch/
+
+# Vercel
+.vercel
+
+# README & docs (not needed in image)
+README.md
+*.md
