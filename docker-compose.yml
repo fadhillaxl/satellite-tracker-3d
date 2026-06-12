@@ -12,18 +12,9 @@ services:
     environment:
       - NODE_ENV=production
       - NEXT_TELEMETRY_DISABLED=1
-      # ── Optional: override Celestrak API base if needed ──
-      # - CELESTRAK_BASE_URL=https://celestrak.org
-    volumes:
-      # Persist satellite TLE cache across restarts so it does not re-download on every boot
-      - satellite_cache:/app/active-satellites-cache.json
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health 2>/dev/null || wget -qO- http://localhost:3000/ >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/ >/dev/null 2>&1 && echo ok"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 20s
-
-volumes:
-  satellite_cache:
-    driver: local
