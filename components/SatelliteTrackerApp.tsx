@@ -165,9 +165,11 @@ export default function SatelliteTrackerApp({ initialNoradId }: AppProps) {
   useEffect(() => {
     let ws: WebSocket | null = null;
     let lastMessageTime = 0;
+    let destroyed = false;
+    let retryDelay = 3000; // start at 3s, doubles each attempt, capped at 30s
 
     function connect() {
-      if (typeof window === 'undefined') return;
+      if (destroyed || typeof window === 'undefined') return;
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.hostname}:3002`;
       
@@ -176,6 +178,7 @@ export default function SatelliteTrackerApp({ initialNoradId }: AppProps) {
         wsRef.current = ws;
 
         ws.onopen = () => {
+          retryDelay = 3000; // reset backoff on successful connect
           console.log('[Tracker UI] Connected to cloud bridge');
         };
 
@@ -193,10 +196,16 @@ export default function SatelliteTrackerApp({ initialNoradId }: AppProps) {
         ws.onclose = () => {
           setAgentOnline(false);
           wsRef.current = null;
-          setTimeout(connect, 3000);
+          if (!destroyed) {
+            setTimeout(connect, retryDelay);
+            retryDelay = Math.min(retryDelay * 2, 30000); // exponential backoff, max 30s
+          }
         };
       } catch {
-        setTimeout(connect, 3000);
+        if (!destroyed) {
+          setTimeout(connect, retryDelay);
+          retryDelay = Math.min(retryDelay * 2, 30000);
+        }
       }
     }
 
@@ -209,10 +218,12 @@ export default function SatelliteTrackerApp({ initialNoradId }: AppProps) {
     }, 1000);
 
     return () => {
+      destroyed = true;
       if (ws) ws.close();
       clearInterval(keepAliveTimer);
     };
   }, []);
+
 
   const sendWsCommand = (cmd: Record<string, unknown>) => {
     if (wsRef.current && wsRef.current.readyState === 1) { // 1 = OPEN
