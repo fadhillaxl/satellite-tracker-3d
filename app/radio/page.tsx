@@ -270,11 +270,13 @@ export default function RadioPage() {
     function connect() {
       if (typeof window === 'undefined') return;
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.hostname}:3002`;
+      const wsPort = process.env.NEXT_PUBLIC_WS_PORT || '3004';
+      const wsUrl = `${protocol}//${window.location.hostname}:${wsPort}`;
       console.log('[Radio UI] Connecting to cloud bridge at:', wsUrl);
       
       try {
         ws = new WebSocket(wsUrl);
+
         wsRef.current = ws;
 
         ws.onopen = () => {

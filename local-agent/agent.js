@@ -6,7 +6,7 @@
  * 1. Detects and connects to Hamlib rigctld (TCP 4532) and rotctld (TCP 4533).
  * 2. Automatically falls back to high-fidelity virtual simulations (with realistic rotator slewing)
  *    if the physical daemons are offline, allowing testing without hardware.
- * 3. Establishes a WebSocket connection to the Next.js Cloud Bridge (WS 3002).
+ * 3. Establishes a WebSocket connection to the Next.js Cloud Bridge (WS 3004).
  * 4. Periodically pushes hardware telemetry to the cloud.
  * 5. Receives and processes radio frequency and antenna tracking commands from the cloud.
  */
@@ -350,8 +350,10 @@ let wsConnected = false;
 let wsReconnectTimeout = null;
 
 function connectToCloud() {
-  log('WS-CLOUD', 'Connecting to Cloud Bridge at ws://localhost:3002...');
-  ws = new WebSocket('ws://localhost:3002');
+  const wsPort = process.env.WS_PORT || '3004';
+  log('WS-CLOUD', `Connecting to Cloud Bridge at ws://localhost:${wsPort}...`);
+  ws = new WebSocket(`ws://localhost:${wsPort}`);
+
 
   ws.on('open', () => {
     wsConnected = true;

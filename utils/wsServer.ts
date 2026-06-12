@@ -9,9 +9,11 @@ export function startWsServer() {
   if (typeof window !== 'undefined') return;
   if (globalForWs.wss) return;
 
+  const wsPort = parseInt(process.env.WS_PORT || '3004', 10);
+
   try {
-    console.log('[WS Cloud Bridge] Initializing WebSocket server on port 3002...');
-    const wss = new WebSocketServer({ port: 3002 });
+    console.log(`[WS Cloud Bridge] Initializing WebSocket server on port ${wsPort}...`);
+    const wss = new WebSocketServer({ port: wsPort });
     globalForWs.wss = wss;
 
     wss.on('connection', (ws) => {
@@ -40,8 +42,9 @@ export function startWsServer() {
       });
     });
 
-    console.log('[WS Cloud Bridge] Server is running on ws://localhost:3002');
+    console.log(`[WS Cloud Bridge] Server is running on ws://localhost:${wsPort}`);
   } catch (err) {
     console.error('[WS Cloud Bridge] Failed to start WebSocket server:', err);
   }
 }
+

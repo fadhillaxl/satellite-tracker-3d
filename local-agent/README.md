@@ -16,7 +16,7 @@ If you haven't already, run the Next.js development server in the root directory
 ```bash
 npm run dev
 ```
-This starts the web application on `http://localhost:3000` (or `3001` if port 3000 is occupied) and initializes the background WebSocket cloud bridge server on port `3002`.
+This starts the web application on `http://localhost:3003` (or the next available port) and initializes the background WebSocket cloud bridge server on port `3004`.
 
 ### 2. Run the Local Agent
 From the project root directory, launch the agent with Node.js:
@@ -26,7 +26,7 @@ node local-agent/agent.js
 
 You should see logs showing:
 ```text
-[10:14:02] [AGENT] Connecting to Cloud Bridge at ws://localhost:3002...
+[10:14:02] [AGENT] Connecting to Cloud Bridge at ws://localhost:3004...
 [10:14:02] [AGENT] Connected to Cloud Bridge! Sending status...
 [10:14:02] [ROTATOR] Connecting to 127.0.0.1:4533...
 [10:14:02] [RIG] Connecting to 127.0.0.1:4532...
@@ -35,6 +35,7 @@ You should see logs showing:
 *Note: If `rigctld` or `rotctld` are not running locally, the agent will gracefully run virtual emulators and periodically retry connection to the hardware.*
 
 ### 3. Open the Rotator Panel
-Navigate to [http://localhost:3000/rotator](http://localhost:3000/rotator) in your browser. 
+Navigate to [http://localhost:3003/rotator](http://localhost:3003/rotator) in your browser. 
+
 - You will see the **LIVE HARDWARE LINK** status card light up as **ONLINE**.
 - You can drag the target azimuth, elevation, and frequency sliders to control the virtual (or real) hardware and watch the dials slew in real-time.

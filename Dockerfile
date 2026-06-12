@@ -18,6 +18,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # Force Webpack (not Turbopack) for production builds — Turbopack is dev-only
 # and extremely slow/unstable in CI/Docker environments.
 ENV NEXT_PRIVATE_SKIP_TURBOPACK=1
+ENV NEXT_PUBLIC_WS_PORT=3004
 
 RUN npm run build
 
@@ -27,6 +28,8 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3003
+ENV WS_PORT=3004
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser  --system --uid 1001 nextjs
@@ -38,7 +41,8 @@ COPY --from=builder /app/active-satellites-cache.json ./active-satellites-cache.
 
 USER nextjs
 
-EXPOSE 3000
-EXPOSE 3002
+EXPOSE 3003
+EXPOSE 3004
 
 CMD ["node", "server.js"]
+
