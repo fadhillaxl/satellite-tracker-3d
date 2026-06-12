@@ -9,6 +9,8 @@ import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import * as satellite from 'satellite.js';
 import { GLOBE_RADIUS_THREE, latLngAltToVector3, EARTH_RADIUS_KM } from '@/utils/orbit';
 import { Eye, EyeOff, Radio, Search, Play, Pause, ChevronRight } from 'lucide-react';
+import Link from 'next/link';
+
 
 interface SatelliteRaw {
   n: string; // name
@@ -908,13 +910,14 @@ export default function GlobeAll3D({ satellites }: GlobeAll3DProps) {
               <span className="text-[10px] text-secondary uppercase block">ALTITUDE</span>
               <span className="mono-font text-white text-xs">{(satTelemetry.alt).toFixed(1)} km</span>
             </div>
-            <a
+            <Link
               href={`/track?norad-id=${satTelemetry.id}`}
               className="btn-tech text-center text-[10px] py-1.5 flex items-center justify-center gap-1 font-bold mt-2"
               style={{ width: '100%', borderColor: '#ff007f', color: '#ff007f' }}
             >
               ZOOM DETAILED TRACKER <ChevronRight className="w-3.5 h-3.5" />
-            </a>
+            </Link>
+
           </div>
         </div>
       )}
