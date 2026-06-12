@@ -7,9 +7,11 @@ const globalForWs = globalThis as unknown as {
 
 export function startWsServer() {
   if (typeof window !== 'undefined') return;
+  if (process.env.IS_BUILD === 'true') return;
   if (globalForWs.wss) return;
 
   const wsPort = parseInt(process.env.WS_PORT || '3004', 10);
+
 
   try {
     console.log(`[WS Cloud Bridge] Initializing WebSocket server on port ${wsPort}...`);

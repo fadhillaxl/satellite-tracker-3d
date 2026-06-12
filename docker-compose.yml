@@ -14,8 +14,12 @@ services:
       - NEXT_TELEMETRY_DISABLED=1
       - PORT=3003
       - WS_PORT=3004
+      - NEXT_PUBLIC_BASE_PATH=/sattracker
+      - NEXT_PUBLIC_WS_PATH=/trackerws
+
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3003/ >/dev/null 2>&1 && echo ok"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3003/sattracker >/dev/null 2>&1 && echo ok"]
+
       interval: 30s
       timeout: 10s
       retries: 3

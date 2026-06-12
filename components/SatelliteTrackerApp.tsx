@@ -66,6 +66,7 @@ interface AppProps {
 }
 
 export default function SatelliteTrackerApp({ initialNoradId }: AppProps) {
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
   const [noradId, setNoradId] = useState<string>(initialNoradId);
   const [satData, setSatData] = useState<SatelliteData | null>(null);
   console.log('[DEBUG] SatelliteTrackerApp render:', { noradId, satDataExists: !!satData });
@@ -111,7 +112,7 @@ export default function SatelliteTrackerApp({ initialNoradId }: AppProps) {
     async function fetchFrequencies() {
       setFrequencies([]);
       try {
-        const res = await fetch(`/api/satellite/${noradId}/frequencies`);
+        const res = await fetch(`${basePath}/api/satellite/${noradId}/frequencies`);
         if (res.ok) {
           const data = await res.json();
           if (active) {
@@ -172,7 +173,10 @@ export default function SatelliteTrackerApp({ initialNoradId }: AppProps) {
       if (destroyed || typeof window === 'undefined') return;
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsPort = process.env.NEXT_PUBLIC_WS_PORT || '3004';
-      const wsUrl = `${protocol}//${window.location.hostname}:${wsPort}`;
+      const wsPath = process.env.NEXT_PUBLIC_WS_PATH || '';
+      const wsUrl = wsPath 
+        ? `${protocol}//${window.location.host}${wsPath}` 
+        : `${protocol}//${window.location.hostname}:${wsPort}`;
       
       try {
         ws = new WebSocket(wsUrl);
@@ -258,7 +262,7 @@ export default function SatelliteTrackerApp({ initialNoradId }: AppProps) {
       setOrbitPoints([]);
 
       try {
-        const res = await fetch(`/api/satellite/${noradId}`);
+        const res = await fetch(`${basePath}/api/satellite/${noradId}`);
         if (!res.ok) {
           const errData = await res.json();
           throw new Error(errData.error || `HTTP error ${res.status}`);

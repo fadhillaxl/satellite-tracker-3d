@@ -14,6 +14,7 @@ interface SatelliteRaw {
 }
 
 export default function AllSatellitesPage() {
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
   const router = useRouter();
   const [satellites, setSatellites] = useState<SatelliteRaw[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -23,7 +24,8 @@ export default function AllSatellitesPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/satellites');
+      const res = await fetch(`${basePath}/api/satellites`);
+
       if (!res.ok) {
         throw new Error(`Failed to load satellite database (${res.status})`);
       }

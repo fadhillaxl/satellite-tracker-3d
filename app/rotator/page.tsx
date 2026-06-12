@@ -234,11 +234,16 @@ export default function RotatorPage() {
       if (typeof window === 'undefined') return;
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsPort = process.env.NEXT_PUBLIC_WS_PORT || '3004';
-      const wsUrl = `${protocol}//${window.location.hostname}:${wsPort}`;
+      const wsPath = process.env.NEXT_PUBLIC_WS_PATH || '';
+      const wsUrl = wsPath 
+        ? `${protocol}//${window.location.host}${wsPath}` 
+        : `${protocol}//${window.location.hostname}:${wsPort}`;
       console.log('[Rotator UI] Connecting to cloud bridge at:', wsUrl);
+
       
       try {
         ws = new WebSocket(wsUrl);
+
 
         wsRef.current = ws;
 
