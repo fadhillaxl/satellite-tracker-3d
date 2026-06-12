@@ -28,7 +28,6 @@ next-env.d.ts
 # Editor & OS
 .vscode
 .idea
-scratch/
 
 # Vercel
 .vercel
