@@ -4,6 +4,8 @@ import path from "path";
 const nextConfig: NextConfig = {
   output: "standalone",
   basePath: process.env.NEXT_PUBLIC_BASE_PATH || undefined,
+  turbopack: {},
+
 
   webpack(config, { isServer }) {
     if (!isServer) {
