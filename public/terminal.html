@@ -1,0 +1,2583 @@
+<!DOCTYPE html>
+<html lang="en">
+
+
+<!-- Mirrored from palatine-space.vercel.app/terminal by HTTrack Website Copier/3.x [XR&CO'2014], Mon, 01 Jun 2026 23:32:33 GMT -->
+<!-- Added by HTTrack --><meta http-equiv="content-type" content="text/html;charset=utf-8" /><!-- /Added by HTTrack -->
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terminal - LEO Analyzer</title>
+    <meta name="description" content="Terminal interface for LEO satellite link budget analysis">
+    <link rel="stylesheet" href="static/css/orbit.css">
+    <link rel="icon" href="static/icon/site-icon.png" type="image/png">
+    <link rel="preconnect" href="https://fonts.googleapis.com/">
+    <link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Geologica:wght@100..900&amp;display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three%400.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three%400.128.0/examples/js/loaders/OBJLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three%400.128.0/examples/js/loaders/MTLLoader.js"></script>
+    <style>
+        /* Terminal Page Specific Styles */
+        .scene {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #000;
+            background-image: url('static/textures/8k_stars_milky_way.jpg');
+            background-size: cover;
+            background-position: center;
+            overflow: hidden;
+        }
+
+        /* The beam - visualizes coverage area as a pie/arc based on min elevation */
+        .beam {
+            position: absolute;
+            bottom: 30%;
+            left: 50%;
+            width: 150vmax;
+            height: 150vmax;
+            border-radius: 50%;
+            background: conic-gradient(from calc(360deg - var(--arc-angle, 90deg) / 2),
+                    rgba(255, 255, 255, 0.85) 0deg,
+                    rgba(255, 255, 255, 0.85) var(--arc-angle, 90deg),
+                    transparent var(--arc-angle, 90deg),
+                    transparent 360deg);
+            transform: translate(-50%, 50%);
+            transition: background 0.3s ease;
+            z-index: 10;
+            opacity: 0.5;
+        }
+
+        /* Heatmap active state */
+        .beam.heatmap-active {
+            background: conic-gradient(from calc(360deg - var(--arc-angle, 90deg) / 2),
+                    rgba(244, 67, 54, 0.85) 0deg,
+                    rgba(255, 235, 59, 0.85) calc(var(--arc-angle, 90deg) / 4),
+                    rgba(33, 150, 243, 0.85) calc(var(--arc-angle, 90deg) / 2),
+                    rgba(255, 235, 59, 0.85) calc(3 * var(--arc-angle, 90deg) / 4),
+                    rgba(244, 67, 54, 0.85) var(--arc-angle, 90deg),
+                    transparent var(--arc-angle, 90deg),
+                    transparent 360deg);
+        }
+
+        /* Radial fade overlay for the beam */
+        .beam::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: radial-gradient(circle at center, transparent 0%, rgba(30, 30, 30, 0.8) 100%);
+        }
+
+        /* The grey horizon hill */
+        .horizon {
+            position: absolute;
+            bottom: 0;
+            width: 150%;
+            height: 30%;
+            background-color: #525252;
+            border-top-left-radius: 100% 100%;
+            border-top-right-radius: 100% 100%;
+            z-index: 20;
+        }
+
+        /* The central black dot */
+        .dot {
+            position: absolute;
+            top: 70%;
+            left: 50%;
+            width: 24px;
+            height: 24px;
+            background-color: #000000;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 30;
+        }
+
+        /* Elevation angle indicator text */
+        .elevation-indicator {
+            position: absolute;
+            bottom: 32%;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #fff;
+            font-size: 14px;
+            font-weight: 600;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+            z-index: 25;
+            opacity: 0.9;
+        }
+
+
+
+        /* Signal Legend */
+        .signal-legend {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            padding: 10px;
+            border-radius: 8px;
+            z-index: 30;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .signal-legend.visible {
+            opacity: 1;
+        }
+
+        .legend-bar {
+            height: 8px;
+            width: 100%;
+            border-radius: 4px;
+            background: linear-gradient(to right, #f44336, #ffeb3b, #2196f3);
+            margin-bottom: 4px;
+        }
+
+        .legend-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            color: #fff;
+            margin-bottom: 2px;
+        }
+
+        .legend-title {
+            text-align: center;
+            font-size: 10px;
+            color: #aaa;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Terminal Control Panel */
+        .terminal-control-panel {
+            padding: 0;
+        }
+
+        /* Ensure viz-panel clips incorrectly sized children and positions headers correctly */
+        .viz-panel {
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Update Viz Header for Overlay Style */
+        .viz-header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 24px 24px 16px;
+            /* Increased top padding */
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: linear-gradient(to bottom, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0) 100%);
+            z-index: 100;
+            pointer-events: none;
+            /* Allow events through transparent parts if needed, but buttons need events */
+        }
+
+        .view-toggle {
+            margin-top: 10px;
+            /* Extra spacing from top edge */
+            pointer-events: auto;
+        }
+
+        .viz-header>* {
+            pointer-events: auto;
+            /* Re-enable events for buttons */
+        }
+
+        /* Viz Footer / Legend Overlay */
+        .viz-footer {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            padding: 16px 24px;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0) 100%);
+            z-index: 90;
+            display: flex;
+            justify-content: center;
+            pointer-events: none;
+        }
+
+        /* Legend specific dots */
+        .legend-dot.satellite-dot {
+            background-color: #fff;
+            box-shadow: 0 0 4px #fff;
+        }
+
+        .legend-dot.beam-dot {
+            background: radial-gradient(circle, rgba(255, 235, 59, 1) 0%, rgba(244, 67, 54, 1) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        .viz-footer .viz-legend {
+            /* Override existing legend styles for insertion */
+            margin-top: 0;
+            background: transparent;
+            border: none;
+        }
+
+        .terminal-control-panel .slider-row {
+            margin-bottom: 12px;
+        }
+
+        .unit-label {
+            font-size: 11px;
+            color: #666;
+            margin-left: 4px;
+        }
+
+        .calculate-btn {
+            background: #171717;
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .calculate-btn:hover {
+            background: #333;
+            transform: scale(1.02);
+        }
+
+        .calculate-btn:active {
+            transform: scale(0.98);
+        }
+
+        .calculate-btn:disabled {
+            background: #555;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Results Panel Styles */
+        .results-panel {
+            background: #fafafa;
+            border-top: 1px solid #e0e0e0;
+            padding: 24px;
+            display: none;
+        }
+
+        .results-panel.visible {
+            display: block;
+        }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .results-header h3 {
+            font-size: 18px;
+            font-weight: 600;
+            color: #171717;
+            margin: 0;
+        }
+
+        .results-timestamp {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .simulation-info {
+            font-size: 11px;
+            color: #fff;
+            background: #505544;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-weight: 500;
+            letter-spacing: 0.3px;
+        }
+
+        /* Metrics Grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .metric-card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 16px;
+            transition: all 0.2s ease;
+        }
+
+        .metric-card:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        .metric-label {
+            font-size: 11px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .metric-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #171717;
+        }
+
+        .metric-value.positive {
+            color: #2e7d32;
+        }
+
+        .metric-value.negative {
+            color: #c62828;
+        }
+
+        .metric-unit {
+            font-size: 12px;
+            color: #666;
+            font-weight: 400;
+        }
+
+        /* Charts Grid */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+
+        .chart-card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .chart-wrapper {
+            width: 100%;
+            height: 250px;
+            background: #2a2a2a;
+            padding: 10px;
+        }
+
+        .chart-wrapper canvas {
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        .chart-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #171717;
+            padding: 12px;
+            text-align: center;
+            background: #f5f5f5;
+            border-top: 1px solid #e0e0e0;
+            cursor: help;
+            transition: background 0.2s ease;
+        }
+
+        .chart-title:hover {
+            background: #ebebeb;
+        }
+
+        /* Loading State - Palatine Style */
+        /* Loading State - Palatine Style */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .loading-overlay.visible {
+            display: flex;
+        }
+
+        .loader-container {
+            width: 600px;
+            position: relative;
+            font-family: 'Geologica', sans-serif;
+            /* Explicitly use reference font */
+        }
+
+        .loader-header {
+            background-color: #FFFFFF;
+            height: 60px;
+            /* Reference uses 60px */
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            border-top-left-radius: 4px;
+            border-top-right-radius: 20px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .header-text {
+            /* Renamed from loader-header-text to match reference */
+            font-weight: 600;
+            font-size: 20px;
+            color: #171717;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+
+            /* Slide Animation */
+            opacity: 0;
+            transform: translateX(-30px);
+            animation: textSlideIn 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+            animation-delay: 0.2s;
+        }
+
+        .header-star {
+            width: 28px;
+            height: 28px;
+            animation: spinStar 2s linear infinite;
+        }
+
+        .loader-body {
+            background-color: #505544;
+            color: #FFFFFF;
+            width: 100%;
+            max-height: 0;
+            /* Hidden by default for animation */
+            overflow: hidden;
+            border-bottom-left-radius: 4px;
+            border-bottom-right-radius: 4px;
+            transition: max-height 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        .loader-body.is-open {
+            max-height: 350px;
+        }
+
+        .body-padding {
+            padding: 30px;
+            padding-top: 15px;
+        }
+
+        .info-row {
+            /* Renamed from loader-info-row */
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-bottom: 24px;
+        }
+
+        .percentage-display {
+            /* Renamed from loader-percentage */
+            font-size: 80px;
+            font-weight: 400;
+            line-height: 1;
+            font-variant-numeric: tabular-nums;
+            min-width: 220px;
+        }
+
+        .copyright-tag {
+            /* Renamed from loader-copyright */
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            opacity: 0.9;
+            margin-bottom: 8px;
+            white-space: nowrap;
+        }
+
+        .progress-grid {
+            display: flex;
+            gap: 6px;
+            height: 60px;
+            width: 100%;
+            margin-bottom: 12px;
+        }
+
+        .p-block {
+            flex: 1;
+            border: 1px solid #FFFFFF;
+            height: 100%;
+            background-color: transparent;
+            transition: background-color 0.1s ease;
+        }
+
+        .p-block.filled {
+            background-color: #FFFFFF;
+        }
+
+        .random-bars-container {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            width: 60%;
+        }
+
+        .random-bar {
+            height: 4px;
+            background-color: #FFFFFF;
+            width: 100%;
+            transform-origin: left;
+            opacity: 0.8;
+        }
+
+        .bar-1 {
+            animation: glitchBar1 2.5s infinite alternate;
+        }
+
+        .bar-2 {
+            animation: glitchBar2 3.1s infinite alternate-reverse;
+        }
+
+        /* Keyframes */
+        @keyframes textSlideIn {
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes spinStar {
+            from {
+                transform: rotate(0deg);
+            }
+
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes glitchBar1 {
+            0% {
+                width: 10%;
+            }
+
+            20% {
+                width: 60%;
+            }
+
+            40% {
+                width: 30%;
+            }
+
+            60% {
+                width: 90%;
+            }
+
+            80% {
+                width: 40%;
+            }
+
+            100% {
+                width: 100%;
+            }
+        }
+
+        @keyframes glitchBar2 {
+            0% {
+                width: 80%;
+            }
+
+            25% {
+                width: 20%;
+            }
+
+            50% {
+                width: 50%;
+            }
+
+            75% {
+                width: 10%;
+            }
+
+            100% {
+                width: 70%;
+            }
+        }
+
+        @keyframes glitchBar1 {
+            0% {
+                width: 10%;
+            }
+
+            20% {
+                width: 60%;
+            }
+
+            40% {
+                width: 30%;
+            }
+
+            60% {
+                width: 90%;
+            }
+
+            80% {
+                width: 40%;
+            }
+
+            100% {
+                width: 100%;
+            }
+        }
+
+        @keyframes glitchBar2 {
+            0% {
+                width: 80%;
+            }
+
+            25% {
+                width: 20%;
+            }
+
+            50% {
+                width: 50%;
+            }
+
+            75% {
+                width: 10%;
+            }
+
+            100% {
+                width: 70%;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .metrics-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        /* --- LINK BUDGET WATERFALL CSS --- */
+        /* --- LINK BUDGET WATERFALL CSS --- */
+        .link-budget-wrapper {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            background: #D9D9D9;
+            /* Control Panel Color */
+            padding: 20px 30px;
+            /* Reduced Padding */
+            border-radius: 12px;
+            box-shadow: none;
+            /* Removed Shadow */
+            position: relative;
+            width: 100%;
+            margin-bottom: 20px;
+            margin-top: 20px;
+            box-sizing: border-box;
+            color: #171717;
+            /* Dark text */
+        }
+
+        /* --- SIDE LABELS --- */
+        .lb-label-text {
+            font-weight: 800;
+            font-size: 1.2rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            z-index: 2;
+            color: #171717;
+            /* Dark text */
+        }
+
+        .lb-label-sat {
+            margin-right: 20px;
+        }
+
+        .lb-label-gnd {
+            margin-left: 20px;
+            text-align: right;
+        }
+
+        /* --- CHART TRACK --- */
+        .lb-chart-track {
+            position: relative;
+            display: flex;
+            align-items: center;
+            height: 300px;
+            /* Reduced Height from 400px */
+            padding: 0 5px;
+            overflow: hidden;
+            flex: 1;
+        }
+
+        .lb-chart-track::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            width: 100%;
+            height: 1px;
+            background-color: rgba(0, 0, 0, 0.2);
+            /* Darker axis line */
+            z-index: 0;
+        }
+
+        /* --- SIGNAL NOISE WAVE --- */
+        .lb-signal-container {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            width: 100%;
+            height: 100px;
+            transform: translateY(-50%);
+            z-index: 0;
+            pointer-events: none;
+            opacity: 0.4;
+            mix-blend-mode: multiply;
+            /* Better for light bg */
+        }
+
+        .lb-signal-svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 200%;
+            height: 100%;
+            fill: none;
+            stroke: rgba(0, 0, 0, 0.3);
+            /* Dark stroke */
+            stroke-width: 1.5;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            animation: scrollSignalRight 8s linear infinite;
+        }
+
+        @keyframes scrollSignalRight {
+            0% {
+                transform: translateX(-50%);
+            }
+
+            100% {
+                transform: translateX(0);
+            }
+        }
+
+        /* --- COMPONENTS --- */
+        .lb-c-shape {
+            width: 30px;
+            height: 80px;
+            border: 4px solid #171717;
+            /* Dark border */
+            box-sizing: border-box;
+            position: relative;
+            z-index: 2;
+            flex-shrink: 0;
+            background-color: #D9D9D9;
+            /* Match wrapper bg */
+        }
+
+        .lb-c-sat {
+            border-right: none;
+            border-radius: 100px 0 0 100px;
+            margin-right: 10px;
+        }
+
+        .lb-c-gnd {
+            border-left: none;
+            border-radius: 0 100px 100px 0;
+            margin-right: 10px;
+            margin-left: 10px;
+        }
+
+        .lb-bar-column {
+            position: relative;
+            width: 60px;
+            height: 100%;
+            margin-right: 10px;
+            pointer-events: none;
+            flex: 1;
+        }
+
+        .lb-candle {
+            position: absolute;
+            width: 100%;
+            z-index: 1;
+            /* Box shadow removed */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s;
+            pointer-events: auto;
+            opacity: 0;
+            transform: scaleY(0);
+            animation: growCandle 0.6s ease-out forwards;
+        }
+
+        .lb-candle:hover {
+            transform: scaleY(1) scaleX(1.1) !important;
+            z-index: 10;
+            filter: brightness(1.2);
+        }
+
+        @keyframes growCandle {
+            0% {
+                opacity: 0;
+                transform: scaleY(0);
+            }
+
+            100% {
+                opacity: 1;
+                transform: scaleY(1);
+            }
+        }
+
+        /* Labels */
+        .lb-label-top {
+            position: absolute;
+            top: 40px;
+            /* Adjusted from 90px */
+            width: 100%;
+            text-align: center;
+            font-size: 0.75rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            color: #444;
+            /* Darker label */
+            letter-spacing: 0.5px;
+            line-height: 1.1;
+            opacity: 0;
+            animation: fadeInLabel 0.5s ease forwards;
+        }
+
+        /* --- SIDE LABELS --- */
+        .lb-label-text {
+            font-weight: 800;
+            font-size: 1.2rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            z-index: 2;
+            color: #171717;
+            /* Dark text */
+        }
+
+        .lb-label-sat {
+            margin-right: 20px;
+        }
+
+        .lb-label-gnd {
+            margin-left: 20px;
+            text-align: right;
+        }
+
+        /* --- CHART TRACK --- */
+        .lb-chart-track {
+            position: relative;
+            display: flex;
+            align-items: center;
+            height: 400px;
+            padding: 0 5px;
+            overflow: hidden;
+            flex: 1;
+        }
+
+        .lb-chart-track::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            width: 100%;
+            height: 1px;
+            background-color: rgba(0, 0, 0, 0.2);
+            /* Darker axis line */
+            z-index: 0;
+        }
+
+        /* --- SIGNAL NOISE WAVE --- */
+        .lb-signal-container {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            width: 100%;
+            height: 100px;
+            transform: translateY(-50%);
+            z-index: 0;
+            pointer-events: none;
+            opacity: 0.4;
+            mix-blend-mode: multiply;
+            /* Better for light bg */
+        }
+
+        .lb-signal-svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 200%;
+            height: 100%;
+            fill: none;
+            stroke: rgba(0, 0, 0, 0.3);
+            /* Dark stroke */
+            stroke-width: 1.5;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            animation: scrollSignalRight 8s linear infinite;
+        }
+
+        @keyframes scrollSignalRight {
+            0% {
+                transform: translateX(-50%);
+            }
+
+            100% {
+                transform: translateX(0);
+            }
+        }
+
+        /* --- COMPONENTS --- */
+        .lb-c-shape {
+            width: 30px;
+            height: 80px;
+            border: 4px solid #171717;
+            /* Dark border */
+            box-sizing: border-box;
+            position: relative;
+            z-index: 2;
+            flex-shrink: 0;
+            background-color: #D9D9D9;
+            /* Match wrapper bg */
+        }
+
+        .lb-c-sat {
+            border-right: none;
+            border-radius: 100px 0 0 100px;
+            margin-right: 10px;
+        }
+
+        .lb-c-gnd {
+            border-left: none;
+            border-radius: 0 100px 100px 0;
+            margin-right: 10px;
+            margin-left: 10px;
+        }
+
+        .lb-bar-column {
+            position: relative;
+            width: 60px;
+            height: 100%;
+            margin-right: 10px;
+            pointer-events: none;
+            flex: 1;
+        }
+
+        .lb-candle {
+            position: absolute;
+            width: 100%;
+            z-index: 1;
+            /* Box shadow removed */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s;
+            pointer-events: auto;
+            opacity: 0;
+            transform: scaleY(0);
+            animation: growCandle 0.6s ease-out forwards;
+        }
+
+        .lb-candle:hover {
+            transform: scaleY(1) scaleX(1.1) !important;
+            z-index: 10;
+            filter: brightness(1.2);
+        }
+
+        @keyframes growCandle {
+            0% {
+                opacity: 0;
+                transform: scaleY(0);
+            }
+
+            100% {
+                opacity: 1;
+                transform: scaleY(1);
+            }
+        }
+
+        /* Labels */
+        .lb-label-top {
+            position: absolute;
+            top: 90px;
+            width: 100%;
+            text-align: center;
+            font-size: 0.75rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            color: #444;
+            /* Darker label */
+            letter-spacing: 0.5px;
+            line-height: 1.1;
+            opacity: 0;
+            animation: fadeInLabel 0.5s ease forwards;
+        }
+
+        @keyframes fadeInLabel {
+            to {
+                opacity: 1;
+            }
+        }
+
+        .lb-label-value {
+            font-size: 0.85rem;
+            font-weight: 800;
+            color: #fff;
+            /* Keep White */
+            text-shadow: 1px 1px 0px rgba(0, 0, 0, 0.5);
+            z-index: 5;
+            white-space: nowrap;
+        }
+
+        /* Bar Colors & Positions */
+        .lb-candle.eirp {
+            background: #00e676;
+            top: calc(50% - 80px);
+            /* Base height for +56 */
+            height: 80px;
+            transform-origin: bottom;
+            animation-delay: 0.2s;
+        }
+
+        .lb-bar-column:nth-child(2) .lb-label-top {
+            animation-delay: 0.2s;
+        }
+
+        .lb-candle.path {
+            background: #ff1744;
+            top: calc(50% - 80px);
+            height: 200px;
+            transform-origin: top;
+            animation-delay: 0.6s;
+        }
+
+        .lb-bar-column:nth-child(3) .lb-label-top {
+            animation-delay: 0.6s;
+        }
+
+        .lb-candle.atmos {
+            background: #ff1744;
+            top: calc(50% + 120px);
+            height: 20px;
+            transform-origin: top;
+            animation-delay: 1.0s;
+        }
+
+        .lb-bar-column:nth-child(4) .lb-label-top {
+            animation-delay: 1.0s;
+        }
+
+        .lb-candle.rx {
+            background: #00e676;
+            top: calc(50% + 80px);
+            /* Starts from bottom of atmos */
+            height: 60px;
+            transform-origin: bottom;
+            animation-delay: 1.4s;
+        }
+
+        .lb-bar-column:nth-child(6) .lb-label-top {
+            animation-delay: 1.4s;
+        }
+
+        .lb-candle.misc {
+            background: #ff1744;
+            top: calc(50% + 80px);
+            /* 60px up from bottom baseline */
+            height: 20px;
+            transform-origin: top;
+            animation-delay: 1.8s;
+        }
+
+        .lb-bar-column:nth-child(7) .lb-label-top {
+            animation-delay: 1.8s;
+        }
+
+        .lb-candle.result {
+            background: #00e5ff;
+            top: 50%;
+            /* Centered around 0 line */
+            height: 100px;
+            transform-origin: top;
+            animation-delay: 2.2s;
+        }
+
+        .lb-bar-column:nth-child(8) .lb-label-top {
+            animation-delay: 2.2s;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Global Header -->
+    <header class="global-header">
+        <div class="header-left">
+            <a href="index.html">
+                <img src="static/logo/palatine-black.svg" alt="Palatine Logo" class="brand-logo">
+            </a>
+            <span class="brand-divider"></span>
+            <a href="analyzer.html" class="nav-link">LEO ANALYZER</a>
+            <a href="terminal.html" class="nav-link active">TERMINAL</a>
+            <a href="isl-simulations.html" class="nav-link">ISL SIMULATIONS</a>
+            <a href="citations.html" class="nav-link">CITATIONS</a>
+            <a href="/all" class="nav-link">3D TRACKER</a>
+        </div>
+        <div class="header-right">
+            <img src="static/icon/profile.svg" alt="Profile" class="profile-icon">
+        </div>
+    </header>
+
+    <!-- Main App Container -->
+    <div class="app-container">
+        <!-- Left Panel: Visualization -->
+        <div class="viz-panel">
+            <div class="viz-header">
+                <div class="view-toggle">
+                    <button id="btn-2d" class="toggle-btn active">2D</button>
+                    <button id="btn-3d" class="toggle-btn">3D</button>
+                </div>
+            </div>
+            <div class="scene" id="scene-2d">
+                <div class="beam" id="elevation-beam"></div>
+                <div class="horizon"></div>
+                <div class="dot"></div>
+                <div class="elevation-indicator" id="elevation-indicator">Min Elevation: 10°</div>
+
+                <!-- Signal Quality Legend -->
+                <div class="signal-legend" id="signal-legend">
+                    <div class="legend-bar"></div>
+                    <div class="legend-labels">
+                        <span id="legend-min">-- dBW</span>
+                        <span id="legend-max">-- dBW</span>
+                    </div>
+                    <div class="legend-title">Signal Power</div>
+                </div>
+            </div>
+
+            <!-- 3D Visualization Container -->
+            <div id="scene-3d" style="display: none; width: 100%; height: 100%; position: relative; background: #000;">
+            </div>
+
+            <!-- Visualization Footer (Legend) -->
+            <div class="viz-footer">
+                <!-- 2D Legend -->
+                <div id="legend-2d" class="viz-legend" style="border:none; padding:0; background:none; display:flex;">
+                    <div class="legend-item">
+                        <span class="legend-dot" style="background:black; border:1px solid #555;"></span>
+                        <span>Station</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-dot beam-dot"></span>
+                        <span>Beam Coverage</span>
+                    </div>
+                </div>
+
+                <!-- 3D Legend -->
+                <div id="legend-3d" class="viz-legend" style="border:none; padding:0; background:none; display:none;">
+                    <div class="legend-item">
+                        <span class="legend-dot satellite-dot"></span>
+                        <span>Satellite</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-line" style="background:#00ffff;"></span>
+                        <span>Longest Pass</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-dot beam-dot"></span>
+                        <span>Sky Dome</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Controls -->
+        <div class="control-panel terminal-control-panel">
+            <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <h2>Link Budget</h2>
+                <button id="calculate-btn" class="calculate-btn">Calculate</button>
+            </div>
+
+            <!-- Space Segment Dropdown -->
+            <div class="dropdown-container is-open" id="dropdown-space">
+                <div class="dropdown-header" onclick="toggleDropdown('dropdown-space')">
+                    <span class="header-title">Space Segment</span>
+                    <svg class="arrow-icon" viewBox="0 0 24 24">
+                        <path d="M7 17 L17 7" stroke-linecap="round" stroke-linejoin="round" />
+                        <path d="M7 7 L17 7 L17 17" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                </div>
+                <div class="dropdown-content">
+                    <div class="slider-row">
+                        <div class="slider-label-row">
+                            <span>Orbit Altitude<span class="unit-label">(km)</span></span>
+                            <span id="val-altitude">1000</span>
+                        </div>
+                        <input type="range" min="160" max="2000" value="1000" id="range-altitude">
+                    </div>
+
+                    <div class="slider-row" style="margin-bottom: 0;">
+                        <div class="slider-label-row">
+                            <span>Inclination<span class="unit-label">(°)</span></span>
+                            <span id="val-sat-inclination">50</span>
+                        </div>
+                        <input type="range" min="0" max="90" step="1" value="50" id="range-sat-inclination">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ground Segment Dropdown -->
+            <div class="dropdown-container is-open" id="dropdown-ground">
+                <div class="dropdown-header" onclick="toggleDropdown('dropdown-ground')">
+                    <span class="header-title">Ground Segment</span>
+                    <svg class="arrow-icon" viewBox="0 0 24 24">
+                        <path d="M7 17 L17 7" stroke-linecap="round" stroke-linejoin="round" />
+                        <path d="M7 7 L17 7 L17 17" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                </div>
+                <div class="dropdown-content">
+                    <div class="slider-row">
+                        <div class="slider-label-row">
+                            <span>Latitude<span class="unit-label">(°)</span></span>
+                            <span id="val-latitude">41</span>
+                        </div>
+                        <input type="range" min="-90" max="90" step="1" value="41" id="range-latitude">
+                    </div>
+
+                    <div class="slider-row" style="margin-bottom: 0;">
+                        <div class="slider-label-row">
+                            <span>Min Elevation Angle<span class="unit-label">(°)</span></span>
+                            <span id="val-elevation">10</span>
+                        </div>
+                        <input type="range" min="0" max="90" step="1" value="10" id="range-elevation">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Link & Hardware Specs Dropdown -->
+            <div class="dropdown-container is-open" id="dropdown-link">
+                <div class="dropdown-header" onclick="toggleDropdown('dropdown-link')">
+                    <span class="header-title">Link & Hardware Specs</span>
+                    <svg class="arrow-icon" viewBox="0 0 24 24">
+                        <path d="M7 17 L17 7" stroke-linecap="round" stroke-linejoin="round" />
+                        <path d="M7 7 L17 7 L17 17" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                </div>
+                <div class="dropdown-content">
+                    <div class="slider-row">
+                        <div class="slider-label-row">
+                            <span>Frequency<span class="unit-label">(GHz)</span></span>
+                            <span id="val-frequency">20.0</span>
+                        </div>
+                        <input type="range" min="1" max="40" step="0.1" value="20.0" id="range-frequency">
+                    </div>
+
+                    <div class="slider-row">
+                        <div class="slider-label-row">
+                            <span>Exceedance Probability<span class="unit-label">(%)</span></span>
+                            <span id="val-exceedance">0.1</span>
+                        </div>
+                        <input type="range" min="0.01" max="10" step="0.01" value="0.1" id="range-exceedance">
+                    </div>
+
+                    <div class="slider-row">
+                        <div class="slider-label-row">
+                            <span>Transmitter Power / EIRP<span class="unit-label">(dBW)</span></span>
+                            <span id="val-eirp">56</span>
+                        </div>
+                        <input type="range" min="0" max="80" step="1" value="56" id="range-eirp">
+                    </div>
+
+                    <div class="slider-row">
+                        <div class="slider-label-row">
+                            <span>Receiver Gain / Gr<span class="unit-label">(dBi)</span></span>
+                            <span id="val-gr">40</span>
+                        </div>
+                        <input type="range" min="0" max="60" step="1" value="40" id="range-gr">
+                    </div>
+
+                    <div class="slider-row" style="margin-bottom: 0;">
+                        <div class="slider-label-row">
+                            <span>Required Power<span class="unit-label">(dBW)</span></span>
+                            <span id="val-required-power">-105</span>
+                        </div>
+                        <input type="range" min="-150" max="-80" step="1" value="-105" id="range-required-power">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results/Output Section -->
+            <div class="time-section">
+                <span class="time-label">Link Margin (Expected)</span>
+                <div class="time-display" id="link-margin">-- dB</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Panel -->
+    <div class="results-panel" id="results-panel">
+        <div class="results-header">
+            <h3>Analysis Results</h3>
+            <span class="simulation-info" id="simulation-info">60 days @ 10s intervals</span>
+            <span class="results-timestamp" id="results-timestamp">--</span>
+        </div>
+
+        <!-- Link Budget Waterfall Chart -->
+        <div class="link-budget-wrapper">
+
+            <div class="lb-label-text lb-label-sat">SATELLITE</div>
+
+            <div class="lb-chart-track">
+
+                <div class="lb-signal-container">
+                    <svg class="lb-signal-svg" viewBox="0 0 1000 100" preserveAspectRatio="none">
+                        <path
+                            d="M0,50 L10,45 L20,55 L30,48 L40,52 L50,40 L60,60 L70,45 L80,55 L90,50 
+                             L100,50 L110,42 L120,58 L130,48 L140,52 L150,35 L160,65 L170,48 L180,52 L190,50 
+                             L200,50 L210,55 L220,45 L230,52 L240,48 L250,30 L260,70 L270,45 L280,55 L290,50 
+                             L300,50 L310,48 L320,52 L330,45 L340,55 L350,40 L360,60 L370,52 L380,48 L390,50 
+                             L400,50 L410,55 L420,45 L430,58 L440,42 L450,35 L460,65 L470,50 L480,50 L490,50 
+                             L500,50 L510,45 L520,55 L530,48 L540,52 L550,40 L560,60 L570,45 L580,55 L590,50 
+                             L600,50 L610,42 L620,58 L630,48 L640,52 L650,35 L660,65 L670,48 L680,52 L690,50 
+                             L700,50 L710,55 L720,45 L730,52 L740,48 L750,30 L760,70 L770,45 L780,55 L790,50 
+                             L800,50 L810,48 L820,52 L830,45 L840,55 L850,40 L860,60 L870,52 L880,48 L890,50 
+                             L900,50 L910,55 L920,45 L930,58 L940,42 L950,35 L960,65 L970,50 L980,50 L990,50 L1000,50" />
+                    </svg>
+                </div>
+
+                <div class="lb-c-shape lb-c-sat"></div>
+
+                <div class="lb-bar-column">
+                    <div class="lb-label-top">Tx EIRP</div>
+                    <div class="lb-candle eirp">
+                        <span class="lb-label-value" id="lb-val-eirp">--</span>
+                    </div>
+                </div>
+
+                <div class="lb-bar-column">
+                    <div class="lb-label-top">Path Loss</div>
+                    <div class="lb-candle path">
+                        <span class="lb-label-value" id="lb-val-path">--</span>
+                    </div>
+                </div>
+
+                <div class="lb-bar-column">
+                    <div class="lb-label-top">Atmos Loss</div>
+                    <div class="lb-candle atmos">
+                        <span class="lb-label-value" id="lb-val-atmos">--</span>
+                    </div>
+                </div>
+
+                <div class="lb-c-shape lb-c-gnd"></div>
+
+                <div class="lb-bar-column">
+                    <div class="lb-label-top">Rx Gain</div>
+                    <div class="lb-candle rx">
+                        <span class="lb-label-value" id="lb-val-gain">--</span>
+                    </div>
+                </div>
+
+                <div class="lb-bar-column">
+                    <div class="lb-label-top">Misc Loss</div>
+                    <div class="lb-candle misc">
+                        <span class="lb-label-value" id="lb-val-misc">-2.0</span>
+                    </div>
+                </div>
+
+                <div class="lb-bar-column">
+                    <div class="lb-label-top">Received Power</div>
+                    <div class="lb-candle result">
+                        <span class="lb-label-value" id="lb-val-pr">--</span>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="lb-label-text lb-label-gnd">GROUND</div>
+
+        </div>
+
+        <!-- Metrics Grid -->
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-label">Expected Power</div>
+                <div class="metric-value" id="metric-expected-pr">--</div>
+                <span class="metric-unit">dBW</span>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Worst Case Power</div>
+                <div class="metric-value" id="metric-worst-pr">--</div>
+                <span class="metric-unit">dBW</span>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Best Case Power</div>
+                <div class="metric-value" id="metric-best-pr">--</div>
+                <span class="metric-unit">dBW</span>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Expected Margin</div>
+                <div class="metric-value" id="metric-margin-expected">--</div>
+                <span class="metric-unit">dB</span>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Worst Margin</div>
+                <div class="metric-value" id="metric-margin-worst">--</div>
+                <span class="metric-unit">dB</span>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Visibility Ratio</div>
+                <div class="metric-value" id="metric-visibility">--</div>
+                <span class="metric-unit">%</span>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Std Deviation</div>
+                <div class="metric-value" id="metric-std">--</div>
+                <span class="metric-unit">dB</span>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Samples Used</div>
+                <div class="metric-value" id="metric-samples">--</div>
+                <span class="metric-unit"></span>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Mean Contact Duration</div>
+                <div class="metric-value" id="metric-contact-duration">--</div>
+                <span class="metric-unit">s</span>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Total Contacts</div>
+                <div class="metric-value" id="metric-num-contacts">--</div>
+                <span class="metric-unit"></span>
+            </div>
+        </div>
+
+        <!-- Charts Grid -->
+        <div class="charts-grid">
+            <div class="chart-card">
+                <div class="chart-wrapper"><canvas id="chart-elevation-pdf"></canvas></div>
+                <div class="chart-title"
+                    title="Probability distribution of elevation angles when satellite is visible. Lower angles are more common due to geometric visibility constraints.">
+                    Elevation Angle Distribution</div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-wrapper"><canvas id="chart-power-boxplot"></canvas></div>
+                <div class="chart-title"
+                    title="Comparison of worst-case, expected, and best-case received power levels against the required threshold.">
+                    Received Power Statistics</div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-wrapper"><canvas id="chart-range-elevation"></canvas></div>
+                <div class="chart-title"
+                    title="Relationship between satellite distance (slant range) and elevation angle. Lower elevations result in longer signal paths.">
+                    Slant Range vs Elevation</div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-wrapper"><canvas id="chart-path-loss"></canvas></div>
+                <div class="chart-title"
+                    title="Distribution of total path loss including free space path loss and atmospheric attenuation.">
+                    Path Loss Distribution</div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-wrapper"><canvas id="chart-contact-duration"></canvas></div>
+                <div class="chart-title"
+                    title="Distribution of satellite pass durations. Shows how long the satellite remains visible above the minimum elevation angle.">
+                    Contact Duration Histogram</div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-wrapper"><canvas id="chart-gamma-pdf"></canvas></div>
+                <div class="chart-title"
+                    title="Probability density function of elevation angles. Gray bars show Monte Carlo data, red line shows fitted Gamma distribution.">
+                    Elevation Angle PDF</div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-wrapper"><canvas id="chart-cdf"></canvas></div>
+                <div class="chart-title"
+                    title="Cumulative distribution function comparing empirical data (blue) with Gamma fit (red). Shows probability of elevation being below a given angle.">
+                    Cumulative Distribution Function (CDF)</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="loader-container">
+            <div class="loader-header">
+                <span class="header-text">System Loading...</span>
+                <svg class="header-star" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 0L14.5 9.5L24 12L14.5 14.5L12 24L9.5 14.5L0 12L9.5 9.5L12 0Z" fill="#171717" />
+                </svg>
+            </div>
+            <div class="loader-body" id="loaderBody">
+                <div class="body-padding">
+                    <div class="info-row">
+                        <div class="percentage-display" id="percentText">0%</div>
+                        <div class="copyright-tag">Copyright @ 2026 Palatine Technologies</div>
+                    </div>
+                    <div class="progress-grid" id="progressGrid"></div>
+                    <div class="random-bars-container">
+                        <div class="random-bar bar-1"></div>
+                        <div class="random-bar bar-2"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer Section -->
+    <footer class="site-footer">
+        <div class="footer-content">
+            <div class="footer-left">
+                <img src="static/logo/palatine-white.svg" alt="Palatine Technologies" class="footer-logo">
+
+                <div class="copyright-wrapper">
+                    <div class="copyright-text">
+                        COPYRIGHT © 2026 PALATINE TECHNOLOGIES
+                    </div>
+                    <ul class="legal-links">
+                        <li><a href="#">License</a></li>
+                        <li><a href="#">Privacy Policy</a></li>
+                        <li><a href="#">Terms of Use</a></li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="footer-right">
+                <div class="footer-column">
+                    <div class="column-header">COMPANY</div>
+                    <ul class="footer-links">
+                        <li><a href="#">About</a></li>
+                        <li><a href="#">Mission</a></li>
+                        <li><a href="#">GitHub</a></li>
+                    </ul>
+                </div>
+                <div class="footer-column">
+                    <div class="column-header">ORIGINAL CREATORS</div>
+                    <ul class="footer-links">
+                        <li><a href="#">Vortexa Selenic Team</a></li>
+                        <li><a href="#">NASA Space Apps Jakarta 2025</a></li>
+                    </ul>
+                </div>
+                <div class="footer-column">
+                    <div class="column-header">RESEARCH</div>
+                    <ul class="footer-links">
+                        <li><a href="#">2026 Whitepaper</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Chart.js and Link Budget Calculator -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js%404.4.1/dist/chart.umd.min.js"></script>
+    <script src="static/js/link-budget.js"></script>
+
+    <!-- Control Scripts -->
+    <script>
+        // Chart instances
+        let charts = {};
+        const calculator = new LinkBudgetCalculator();
+
+        // Dropdown toggle function
+        function toggleDropdown(id) {
+            document.getElementById(id).classList.toggle('is-open');
+        }
+
+        // Slider value updates
+        document.getElementById('range-altitude').addEventListener('input', (e) => {
+            document.getElementById('val-altitude').textContent = e.target.value;
+        });
+
+        document.getElementById('range-sat-inclination').addEventListener('input', (e) => {
+            document.getElementById('val-sat-inclination').textContent = e.target.value;
+        });
+
+        document.getElementById('range-latitude').addEventListener('input', (e) => {
+            document.getElementById('val-latitude').textContent = e.target.value;
+        });
+
+        document.getElementById('range-elevation').addEventListener('input', (e) => {
+            const elevation = parseFloat(e.target.value);
+            document.getElementById('val-elevation').textContent = elevation;
+            updateBeamVisualization(elevation);
+        });
+
+        // Update beam visualization based on min elevation angle
+        function updateBeamVisualization(elevationDeg) {
+            const beam = document.getElementById('elevation-beam');
+            const indicator = document.getElementById('elevation-indicator');
+
+            // Convert min elevation angle to visibility arc angle
+            // At 0° min elevation: full hemisphere visible = 180° arc
+            // At 90° min elevation: only zenith visible = 0° arc
+            // Arc angle = 180° - (2 × min_elevation)
+            const arcAngle = 180 - (2 * elevationDeg);
+
+            beam.style.setProperty('--arc-angle', arcAngle + 'deg');
+            indicator.textContent = 'Min Elevation: ' + elevationDeg + '°';
+        }
+
+        // Initialize beam visualization on page load
+        updateBeamVisualization(10);
+
+        document.getElementById('range-frequency').addEventListener('input', (e) => {
+            document.getElementById('val-frequency').textContent = parseFloat(e.target.value).toFixed(1);
+        });
+
+        document.getElementById('range-exceedance').addEventListener('input', (e) => {
+            document.getElementById('val-exceedance').textContent = parseFloat(e.target.value).toFixed(2);
+        });
+
+        document.getElementById('range-eirp').addEventListener('input', (e) => {
+            document.getElementById('val-eirp').textContent = e.target.value;
+        });
+
+        document.getElementById('range-gr').addEventListener('input', (e) => {
+            document.getElementById('val-gr').textContent = e.target.value;
+        });
+
+        document.getElementById('range-required-power').addEventListener('input', (e) => {
+            document.getElementById('val-required-power').textContent = e.target.value;
+        });
+
+        // Create histogram chart
+        function createHistogramChart(canvasId, data, color, xLabel, yLabel) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+
+            // Destroy existing chart
+            if (charts[canvasId]) charts[canvasId].destroy();
+
+            const hist = calculator.createHistogram(data, 30);
+            const labels = hist.edges.slice(0, -1).map((e, i) => ((e + hist.edges[i + 1]) / 2).toFixed(1));
+
+            charts[canvasId] = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: hist.counts,
+                        backgroundColor: color + '99',
+                        borderColor: color,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: {
+                            ticks: { color: '#ccc', maxTicksLimit: 8 },
+                            grid: { color: '#444' },
+                            title: { display: true, text: xLabel, color: '#ccc', font: { size: 11 } }
+                        },
+                        y: {
+                            ticks: { color: '#ccc' },
+                            grid: { color: '#444' },
+                            title: { display: true, text: yLabel, color: '#ccc', font: { size: 11 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Create scatter chart
+        function createScatterChart(canvasId, xData, yData, color, xLabel, yLabel) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+
+            if (charts[canvasId]) charts[canvasId].destroy();
+
+            // Sample data for performance
+            const step = Math.max(1, Math.floor(xData.length / 500));
+            const points = [];
+            for (let i = 0; i < xData.length; i += step) {
+                points.push({ x: xData[i], y: yData[i] });
+            }
+
+            charts[canvasId] = new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        data: points,
+                        backgroundColor: color + '66',
+                        borderColor: color,
+                        pointRadius: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: {
+                            ticks: { color: '#ccc' },
+                            grid: { color: '#444' },
+                            title: { display: true, text: xLabel, color: '#ccc', font: { size: 11 } }
+                        },
+                        y: {
+                            ticks: { color: '#ccc' },
+                            grid: { color: '#444' },
+                            title: { display: true, text: yLabel, color: '#ccc', font: { size: 11 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Create power comparison chart
+        function createPowerChart(canvasId, data) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+
+            if (charts[canvasId]) charts[canvasId].destroy();
+
+            charts[canvasId] = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Worst', 'Expected', 'Best', 'Required'],
+                    datasets: [{
+                        data: [data.worst_case_pr, data.expected_pr, data.best_case_pr, data.chartData.requiredPower],
+                        backgroundColor: ['#f44336', '#4caf50', '#2196f3', '#ff9800'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: { color: '#ccc' }, grid: { color: '#444' }, title: { display: true, text: 'Power (dBW)', color: '#ccc' } },
+                        y: { ticks: { color: '#ccc' }, grid: { color: '#444' } }
+                    }
+                }
+            });
+        }
+
+        // Create contact duration histogram
+        function createContactDurationChart(canvasId, tsData) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+
+            if (charts[canvasId]) charts[canvasId].destroy();
+
+            const hist = calculator.createHistogram(tsData.contactDurations, 25);
+            const labels = hist.centers.map(c => c.toFixed(0));
+
+            charts[canvasId] = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: hist.counts,
+                        backgroundColor: '#00897b99',
+                        borderColor: '#00897b',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: {
+                            ticks: { color: '#ccc', maxTicksLimit: 8 },
+                            grid: { color: '#444' },
+                            title: { display: true, text: 'Duration (seconds)', color: '#ccc', font: { size: 11 } }
+                        },
+                        y: {
+                            ticks: { color: '#ccc' },
+                            grid: { color: '#444' },
+                            title: { display: true, text: 'Frequency', color: '#ccc', font: { size: 11 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Create Gamma PDF chart with histogram and fit line
+        function createGammaPdfChart(canvasId, tsData) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+
+            if (charts[canvasId]) charts[canvasId].destroy();
+
+            const hist = calculator.createHistogram(tsData.visibleTheta, 40);
+            const labels = hist.centers.map(c => c.toFixed(1));
+
+            // Create PDF line data points mapped to bar positions
+            const pdfLineData = [];
+            for (let i = 0; i < labels.length; i++) {
+                const x = parseFloat(labels[i]);
+                const pdf = calculator.gammaPDF(x, tsData.gammaParams.alpha, tsData.gammaParams.loc, tsData.gammaParams.beta);
+                pdfLineData.push(pdf);
+            }
+
+            charts[canvasId] = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            type: 'bar',
+                            label: 'Monte Carlo Data',
+                            data: hist.density,
+                            backgroundColor: '#9e9e9e66',
+                            borderColor: '#9e9e9e',
+                            borderWidth: 1,
+                            order: 2
+                        },
+                        {
+                            type: 'line',
+                            label: 'Gamma Fit (a=' + tsData.gammaParams.alpha.toFixed(2) + ', b=' + tsData.gammaParams.beta.toFixed(2) + ')',
+                            data: pdfLineData,
+                            borderColor: '#f44336',
+                            borderWidth: 2,
+                            fill: false,
+                            tension: 0.4,
+                            pointRadius: 0,
+                            order: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: { color: '#ccc', font: { size: 10 } }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#ccc', maxTicksLimit: 8 },
+                            grid: { color: '#444' },
+                            title: { display: true, text: 'Elevation Angle (deg)', color: '#ccc', font: { size: 11 } }
+                        },
+                        y: {
+                            ticks: { color: '#ccc' },
+                            grid: { color: '#444' },
+                            title: { display: true, text: 'Probability', color: '#ccc', font: { size: 11 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Create CDF comparison chart
+        function createCdfChart(canvasId, tsData) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+
+            if (charts[canvasId]) charts[canvasId].destroy();
+
+            // Sample data for performance (every nth point)
+            const step = Math.max(1, Math.floor(tsData.cdfData.x.length / 200));
+            const empiricalPoints = [];
+            const gammaPoints = [];
+
+            for (let i = 0; i < tsData.cdfData.x.length; i += step) {
+                empiricalPoints.push({ x: tsData.cdfData.x[i], y: tsData.cdfData.empiricalY[i] });
+                gammaPoints.push({ x: tsData.cdfData.x[i], y: tsData.cdfData.gammaY[i] });
+            }
+
+            charts[canvasId] = new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: [
+                        {
+                            label: 'Empirical CDF',
+                            data: empiricalPoints,
+                            borderColor: '#2196f3',
+                            backgroundColor: '#2196f333',
+                            showLine: true,
+                            pointRadius: 0,
+                            borderWidth: 2,
+                            order: 1
+                        },
+                        {
+                            label: 'Gamma Fit CDF',
+                            data: gammaPoints,
+                            borderColor: '#f44336',
+                            backgroundColor: 'transparent',
+                            showLine: true,
+                            pointRadius: 0,
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            order: 2
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: { color: '#ccc', font: { size: 10 } }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#ccc' },
+                            grid: { color: '#444' },
+                            title: { display: true, text: 'Elevation (deg)', color: '#ccc', font: { size: 11 } }
+                        },
+                        y: {
+                            ticks: { color: '#ccc' },
+                            grid: { color: '#444' },
+                            title: { display: true, text: 'Probability', color: '#ccc', font: { size: 11 } },
+                            min: 0,
+                            max: 1
+                        }
+                    }
+                }
+            });
+        }
+
+        // Calculate button handler
+        document.getElementById('calculate-btn').addEventListener('click', () => {
+            const calcBtn = document.getElementById('calculate-btn');
+            const loadingOverlay = document.getElementById('loading-overlay');
+            const resultsPanel = document.getElementById('results-panel');
+            const loaderBody = document.getElementById('loaderBody');
+            const gridContainer = document.getElementById('progressGrid');
+            const percentText = document.getElementById('percentText');
+
+            // Initialize Grid
+            gridContainer.innerHTML = '';
+            const TOTAL_BLOCKS = 20;
+            for (let i = 0; i < TOTAL_BLOCKS; i++) {
+                const block = document.createElement('div');
+                block.className = 'p-block';
+                gridContainer.appendChild(block);
+            }
+
+            // Show loading state
+            calcBtn.disabled = true;
+            calcBtn.textContent = 'Calculating...';
+            loadingOverlay.classList.add('visible');
+
+            // Animation State
+            let loadingComplete = false;
+            let animationFrameId;
+            const DURATION = 3500; // Simulated duration if calculation is fast
+            let startTime = null;
+
+            // Start Animation Sequence
+            // Expand body
+            setTimeout(() => loaderBody.classList.add('is-open'), 100);
+
+            function updateLoader(timestamp) {
+                if (!startTime) startTime = timestamp;
+                // If calculation is done, we accelerate to 100% quickly or just jump
+                // But since calculation blocks, we only see this before/after.
+
+                const progress = timestamp - startTime;
+                let percent = Math.min(progress / DURATION, 0.95); // Stall at 95% until done
+
+                if (loadingComplete) percent = 1;
+
+                let displayPercent = Math.floor(percent * 100);
+                percentText.innerText = `${displayPercent}%`;
+
+                const blocksToFill = Math.floor(percent * TOTAL_BLOCKS);
+                const blocks = gridContainer.children;
+
+                for (let i = 0; i < TOTAL_BLOCKS; i++) {
+                    if (i < blocksToFill) {
+                        blocks[i].classList.add('filled');
+                    } else {
+                        blocks[i].classList.remove('filled');
+                    }
+                }
+
+                if (percent < 1 || !loadingComplete) {
+                    animationFrameId = requestAnimationFrame(updateLoader);
+                } else {
+                    // Finished
+                    setTimeout(finish, 500);
+                }
+            }
+
+            animationFrameId = requestAnimationFrame(updateLoader);
+
+            // Use setTimeout to allow UI update before heavy calculation
+            setTimeout(() => {
+                try {
+                    // Gather parameters
+                    const params = {
+                        altitude: parseFloat(document.getElementById('range-altitude').value),
+                        inclination: parseFloat(document.getElementById('range-sat-inclination').value),
+                        latitude: parseFloat(document.getElementById('range-latitude').value),
+                        minElevation: parseFloat(document.getElementById('range-elevation').value),
+                        frequency: parseFloat(document.getElementById('range-frequency').value),
+                        eirp: parseFloat(document.getElementById('range-eirp').value),
+                        gr: parseFloat(document.getElementById('range-gr').value),
+                        requiredPower: parseFloat(document.getElementById('range-required-power').value)
+                    };
+
+                    // Run calculation
+                    const data = calculator.calculate(params);
+
+                    if (data.error) {
+                        alert('Error: ' + data.error);
+                        loadingComplete = true; // allow exit
+                        return;
+                    }
+
+                    // Update link margin display
+                    document.getElementById('link-margin').textContent = data.link_margin_expected.toFixed(1) + ' dB';
+
+                    // Update metrics
+                    const setMetric = (id, value, decimals = 1) => {
+                        const el = document.getElementById(id);
+                        el.textContent = typeof value === 'number' ? value.toFixed(decimals) : value;
+                        el.className = 'metric-value';
+                        if (id.includes('margin')) {
+                            el.classList.add(value >= 0 ? 'positive' : 'negative');
+                        }
+                    };
+
+                    setMetric('metric-expected-pr', data.expected_pr);
+                    setMetric('metric-worst-pr', data.worst_case_pr);
+                    setMetric('metric-best-pr', data.best_case_pr);
+                    setMetric('metric-margin-expected', data.link_margin_expected);
+                    setMetric('metric-margin-worst', data.link_margin_worst);
+                    setMetric('metric-visibility', data.visibility_ratio);
+                    setMetric('metric-std', data.std_dev_pr);
+                    document.getElementById('metric-samples').textContent = data.samples_count.toLocaleString();
+
+                    // Update Heatmap
+                    const beam = document.getElementById('elevation-beam');
+                    const legend = document.getElementById('signal-legend');
+                    const legendMin = document.getElementById('legend-min');
+                    const legendMax = document.getElementById('legend-max');
+
+                    beam.classList.add('heatmap-active');
+                    legend.classList.add('visible');
+                    legendMin.textContent = data.worst_case_pr.toFixed(1) + ' dBW';
+                    legendMax.textContent = data.best_case_pr.toFixed(1) + ' dBW';
+
+                    // Create charts
+                    createHistogramChart('chart-elevation-pdf', data.chartData.thetaSamples, '#00bcd4', 'Elevation Angle (deg)', 'Frequency');
+                    createPowerChart('chart-power-boxplot', data);
+                    createScatterChart('chart-range-elevation', data.chartData.thetaSamples, data.chartData.slantRangeSamples, '#ff9800', 'Elevation Angle (deg)', 'Slant Range (km)');
+                    createHistogramChart('chart-path-loss', data.chartData.fsplSamples, '#e91e63', 'Total Attenuation (dB)', 'Frequency');
+
+                    // --- Update Link Budget Waterfall ---
+                    document.getElementById('lb-val-eirp').textContent = `+${params.eirp.toFixed(1)}`;
+                    document.getElementById('lb-val-gain').textContent = `+${params.gr.toFixed(1)}`;
+                    document.getElementById('lb-val-misc').textContent = `-2.0`;
+                    document.getElementById('lb-val-pr').textContent = data.expected_pr.toFixed(1);
+
+                    // Calculate Averages for Waterfall Breakdown
+                    if (data.chartData.slantRangeSamples && data.chartData.slantRangeSamples.length > 0) {
+                        const avgRange = data.chartData.slantRangeSamples.reduce((a, b) => a + b, 0) / data.chartData.slantRangeSamples.length;
+                        const avgThetaDeg = data.chartData.thetaSamples.reduce((a, b) => a + b, 0) / data.chartData.thetaSamples.length;
+                        const avgThetaRad = avgThetaDeg * (Math.PI / 180);
+
+                        // Recalculate component losses
+                        const avgFSPL = 92.45 + 20 * Math.log10(avgRange) + 20 * Math.log10(params.frequency);
+                        const avgAtmos = 0.5 / Math.sin(avgThetaRad);
+
+                        document.getElementById('lb-val-path').textContent = `-${avgFSPL.toFixed(1)}`;
+                        document.getElementById('lb-val-atmos').textContent = `-${avgAtmos.toFixed(1)}`;
+                    } else {
+                        document.getElementById('lb-val-path').textContent = '--';
+                        document.getElementById('lb-val-atmos').textContent = '--';
+                    }
+
+                    // Run time-series simulation (60 days @ 10s intervals)
+                    const tsData = calculator.runTimeSeriesSimulation(params, 60, 10);
+
+                    // Update simulation info
+                    document.getElementById('simulation-info').textContent =
+                        `${tsData.days} days @ ${tsData.stepS}s intervals`;
+
+                    // Update time-series metrics
+                    setMetric('metric-contact-duration', tsData.meanContactDuration);
+                    document.getElementById('metric-num-contacts').textContent = tsData.numContacts.toLocaleString();
+
+                    // Create time-series charts
+                    if (tsData.contactDurations.length > 0) {
+                        createContactDurationChart('chart-contact-duration', tsData);
+                        createGammaPdfChart('chart-gamma-pdf', tsData);
+                        createCdfChart('chart-cdf', tsData);
+                    }
+
+                    // Update 3D Visualizer if data available
+                    if (tsData.passes3D && window.passVisualizer3D) {
+                        window.passVisualizer3D.updatePasses(tsData.passes3D);
+                    }
+
+                    // Update timestamp
+                    document.getElementById('results-timestamp').textContent =
+                        'Calculated at ' + new Date().toLocaleTimeString();
+
+                    // Show results panel
+                    resultsPanel.classList.add('visible');
+
+                    // Scroll to results
+                    setTimeout(() => resultsPanel.scrollIntoView({ behavior: 'smooth' }), 100);
+
+                } catch (error) {
+                    console.error('Calculation error:', error);
+                    alert('Calculation failed: ' + error.message);
+                } finally {
+                    // Signal completion to animation
+                    loadingComplete = true;
+                }
+            }, 500); // 500ms delay to allow loader to open
+
+            function finish() {
+                calcBtn.disabled = false;
+                calcBtn.textContent = 'Calculate';
+                loadingOverlay.classList.remove('visible');
+                loaderBody.classList.remove('is-open');
+                // Reset grid?
+            }
+        });
+
+        // --- 3D Visualization Logic ---
+        class PassVisualizer3D {
+            constructor(containerId) {
+                this.container = document.getElementById(containerId);
+                if (!this.container) return;
+
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.controls = null;
+                this.passes = null;
+                this.satMesh = null;
+                this.animPoints = null;
+                this.animIndex = 0;
+                this.lastAnimTime = 0;
+
+                this.init();
+            }
+
+            init() {
+                // Scene
+                this.scene = new THREE.Scene();
+                // Transparent background to show star texture underneath
+                this.scene.background = null;
+
+                // Camera
+                const aspect = this.container.clientWidth / this.container.clientHeight;
+                this.camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000);
+                this.camera.position.set(2, 2, 2);
+                this.camera.up.set(0, 0, 1); // Z-up for Sky Dome coords
+
+                // Renderer
+                this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
+                this.renderer.setPixelRatio(window.devicePixelRatio);
+                this.container.appendChild(this.renderer.domElement);
+
+                // Controls
+                this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+                this.controls.enableDamping = true;
+                this.controls.dampingFactor = 0.05;
+
+                // Lights
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                this.scene.add(ambientLight);
+
+                const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                dirLight.position.set(5, 5, 10);
+                this.scene.add(dirLight);
+
+                // Dome & Grid
+                this.createSkyDome();
+
+                // Resize Handler
+                window.addEventListener('resize', () => this.handleResize());
+
+                // Animation Loop
+                this.animate();
+            }
+
+            createSkyDome() {
+                // Determine Z-up coordinate system: X=East, Y=North, Z=Up
+
+                // Ground Grid
+                const gridHelper = new THREE.GridHelper(2, 20, 0x666666, 0x333333);
+                gridHelper.rotation.x = Math.PI / 2;
+                this.scene.add(gridHelper);
+
+                // --- Heatmap Dome ---
+                // Replicates beamColoring3D.py logic: Color based on Elevation (Z)
+                // Red (Horizon/0) -> Blue (Zenith/1)
+
+                const vertexShader = `
+                    varying vec3 vPosition;
+                    varying vec3 vNormal;
+                    void main() {
+                        vPosition = position;
+                        vNormal = normalize(normal);
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    }
+                `;
+
+                const fragmentShader = `
+                    varying vec3 vPosition;
+                    varying vec3 vNormal;
+                    
+                    // RdYlBu Colormap approximation
+                    // T = 0 (Red), 0.5 (Yellow), 1 (Blue)
+                    
+                    vec3 colormap(float t) {
+                        // Clamp t
+                        t = clamp(t, 0.0, 1.0);
+                        
+                        // Simple Red-Yellow-Blue interpolation
+                        vec3 red = vec3(0.9, 0.2, 0.2);    // Low Z (Horizon)
+                        vec3 yellow = vec3(0.95, 0.9, 0.4); // Mid Z (45 deg)
+                        vec3 blue = vec3(0.2, 0.4, 0.9);   // High Z (Zenith)
+                        
+                        vec3 col;
+                        if (t < 0.5) {
+                            col = mix(red, yellow, t * 2.0);
+                        } else {
+                            col = mix(yellow, blue, (t - 0.5) * 2.0);
+                        }
+                        return col;
+                    }
+                    
+                    void main() {
+                        // Elevation factor
+                        // Sphere geometry is Y-up locally (Poles at +Y/-Y).
+                        // We rotated the mesh so Local Y -> World Z.
+                        // So we use vPosition.y to determine "Elevation" color.
+                        float el = vPosition.y; 
+                        
+                        vec3 baseColor = colormap(el);
+                        
+                        // Add some transparency/fading
+                        float alpha = 0.35; 
+                        
+                        // Rim lighting effect
+                        vec3 viewDir = normalize(cameraPosition - vPosition);
+                        float fresnel = pow(1.0 - abs(dot(viewDir, vNormal)), 2.0);
+                        alpha += fresnel * 0.3;
+                        
+                        gl_FragColor = vec4(baseColor, alpha);
+                    }
+                `;
+
+                const domeGeo = new THREE.SphereGeometry(1, 64, 32, 0, Math.PI * 2, 0, Math.PI / 2);
+                const domeMat = new THREE.ShaderMaterial({
+                    vertexShader: vertexShader,
+                    fragmentShader: fragmentShader,
+                    transparent: true,
+                    side: THREE.DoubleSide,
+                    depthWrite: false // Allow seeing through to tracks inside
+                });
+
+                const domeMesh = new THREE.Mesh(domeGeo, domeMat);
+                domeMesh.rotation.x = Math.PI / 2; // Rotate to Z-up
+                this.scene.add(domeMesh);
+
+                // Add Directions
+                this.addLabel('N', 0, 1.2, 0);
+                this.addLabel('S', 0, -1.2, 0);
+                this.addLabel('E', 1.2, 0, 0);
+                this.addLabel('W', -1.2, 0, 0);
+                this.addLabel('Zenith', 0, 0, 1.1, '#00ffff');
+
+                // Load Starlink Terminal Model
+                this.loadTerminalModel();
+            }
+
+            loadTerminalModel() {
+                const loader = new THREE.OBJLoader();
+                const textureLoader = new THREE.TextureLoader();
+
+                // Load Texture
+                const texture = textureLoader.load('static/textures/starlink-satellite-dish/textures/starlink_dish_lo_Material_BaseColor.png');
+
+                loader.load(
+                    '/static/textures/starlink-satellite-dish/source/starlink.obj',
+                    (object) => {
+                        object.traverse((child) => {
+                            if (child.isMesh) {
+                                child.material.map = texture;
+                                child.material.transparent = false;
+                                child.material.side = THREE.DoubleSide; // Ensure visibility
+                            }
+                        });
+
+                        // Sizing and Positioning
+                        // "Small, just sitting there"
+                        const scale = 0.00025; // Reduced to 0.5% of 0.05
+                        object.scale.set(scale, scale, scale);
+
+                        // Z-up adjustment: Rotate 90deg on X to stand up
+                        object.rotation.x = Math.PI / 2;
+
+                        object.position.set(0, 0, 0);
+
+                        this.scene.add(object);
+                        console.log('Starlink Terminal loaded');
+                    },
+                    (xhr) => {
+                        console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+                    },
+                    (error) => {
+                        console.error('Error loading Starlink terminal:', error);
+                    }
+                );
+            }
+
+            addLabel(text, x, y, z, colorStr = '#ffffff') {
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                canvas.width = 128; // Power of 2
+                canvas.height = 64;
+
+                context.font = 'Bold 32px Arial';
+                context.fillStyle = colorStr;
+                context.textAlign = 'center';
+                context.textBaseline = 'middle';
+                context.fillText(text, 64, 32);
+
+                const texture = new THREE.CanvasTexture(canvas);
+                const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+                const sprite = new THREE.Sprite(material);
+
+                sprite.position.set(x, y, z);
+                sprite.scale.set(0.5, 0.25, 1); // Adjust aspect ratio
+
+                // Add to scene (or separate labels group)
+                this.scene.add(sprite);
+            }
+
+            updatePasses(passesData) {
+                // Clear old lines
+                // Remove group if exists
+                const oldGroup = this.scene.getObjectByName('passes');
+                if (oldGroup) this.scene.remove(oldGroup);
+
+                // Remove old satellite
+                const oldSat = this.scene.getObjectByName('demo-sat');
+                if (oldSat) this.scene.remove(oldSat);
+
+                if (!passesData) return;
+
+
+                const group = new THREE.Group();
+                group.name = 'passes';
+
+                // Keep track of the longest pass for animation
+                let longestPoints = null;
+
+                const types = [
+                    { data: passesData.shortest, color: 0xff4444, name: 'Short' },   // Red
+                    { data: passesData.median, color: 0x888888, name: 'Median' },    // Grey
+                    { data: passesData.longest, color: 0x00ffff, name: 'Long' }      // Cyan
+                ];
+
+                types.forEach(type => {
+                    if (!type.data || !type.data.track) return;
+
+                    const points = [];
+                    type.data.track.forEach(pt => {
+                        const azRad = pt.az * Math.PI / 180;
+                        const elRad = pt.el * Math.PI / 180;
+
+                        // Convert Az/El to XYZ (Z-up)
+                        // Standard math: x = r cos(el) sin(az), y = r cos(el) cos(az)
+                        // Azimuth 0 is North (+Y), 90 is East (+X)
+
+                        const r = 1.02; // Slightly above dome
+                        const x = r * Math.cos(elRad) * Math.sin(azRad);
+                        const y = r * Math.cos(elRad) * Math.cos(azRad);
+                        const z = r * Math.sin(elRad);
+
+                        points.push(new THREE.Vector3(x, y, z));
+
+                        // Add start/end markers
+                        if (pt === type.data.track[0]) {
+                            // Rise
+                            group.add(this.createMarker(x, y, z, type.color, 'cone'));
+                        }
+                        if (pt === type.data.track[type.data.track.length - 1]) {
+                            // Set
+                            group.add(this.createMarker(x, y, z, type.color, 'box'));
+                        }
+                    });
+
+                    // Store longest points for animation
+                    if (type.name === 'Long') {
+                        longestPoints = points;
+                    }
+
+                    const geom = new THREE.BufferGeometry().setFromPoints(points);
+                    const mat = new THREE.LineBasicMaterial({ color: type.color, linewidth: 2 });
+                    const line = new THREE.Line(geom, mat);
+                    group.add(line);
+                });
+
+                this.scene.add(group);
+
+                // Start Animation if we have points
+                if (longestPoints && longestPoints.length > 1) {
+                    this.startSatelliteAnimation(longestPoints);
+                }
+            }
+
+            startSatelliteAnimation(points) {
+                // Remove old satellite
+                const oldSat = this.scene.getObjectByName('demo-sat');
+                if (oldSat) this.scene.remove(oldSat);
+
+                // Create Satellite Mesh
+                const geo = new THREE.SphereGeometry(0.04, 16, 16);
+                const mat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+                this.satMesh = new THREE.Mesh(geo, mat);
+                this.satMesh.name = 'demo-sat';
+                this.scene.add(this.satMesh);
+
+                this.animPoints = points;
+                this.animIndex = 0;
+                this.lastAnimTime = 0;
+            }
+
+            updateAnimation() {
+                if (!this.satMesh || !this.animPoints || this.animPoints.length < 2) return;
+
+                // Simple linear interpolation
+                const speed = 0.005; // Progression speed
+                this.animIndex += speed;
+
+                if (this.animIndex >= this.animPoints.length - 1) {
+                    this.animIndex = 0; // Loop
+                }
+
+                const idx = Math.floor(this.animIndex);
+                const nextIdx = (idx + 1) % this.animPoints.length; // Safety (though loop handles it)
+                const t = this.animIndex - idx;
+
+                const p1 = this.animPoints[idx];
+                const p2 = this.animPoints[idx + 1] || this.animPoints[0]; // Fallback
+
+                // Lerp
+                this.satMesh.position.lerpVectors(p1, p2, t);
+                this.satMesh.lookAt(0, 0, 0); // Optional orientation
+            }
+
+            createMarker(x, y, z, color, shape) {
+                let geo;
+                if (shape === 'cone') geo = new THREE.ConeGeometry(0.03, 0.08, 8);
+                else geo = new THREE.BoxGeometry(0.05, 0.05, 0.05);
+
+                const mat = new THREE.MeshBasicMaterial({ color: color });
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(x, y, z);
+                mesh.lookAt(0, 0, 0);
+                return mesh;
+            }
+
+            handleResize() {
+                if (!this.camera || !this.renderer || !this.container) return;
+                const width = this.container.clientWidth;
+                const height = this.container.clientHeight;
+                if (window.getComputedStyle(this.container).display === 'none') return;
+
+                this.camera.aspect = width / height;
+                this.camera.updateProjectionMatrix();
+                // Check if width/height are 0
+                if (width > 0 && height > 0) {
+                    this.renderer.setSize(width, height);
+                }
+            }
+
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                if (this.controls) this.controls.update();
+
+                this.updateAnimation(); // <--- Add animation step
+
+                if (this.renderer && this.scene && this.camera) {
+                    this.renderer.render(this.scene, this.camera);
+                }
+            }
+        }
+
+        // Initialize 3D View
+        // Wait for DOM
+        setTimeout(() => {
+            window.passVisualizer3D = new PassVisualizer3D('scene-3d');
+
+            // Handle Toggle
+            const btn2D = document.getElementById('btn-2d');
+            const btn3D = document.getElementById('btn-3d');
+            const scene2D = document.getElementById('scene-2d');
+            const scene3D = document.getElementById('scene-3d');
+
+            const legend2D = document.getElementById('legend-2d');
+            const legend3D = document.getElementById('legend-3d');
+
+            btn2D.addEventListener('click', () => {
+                scene2D.style.display = 'flex'; // Restore flex for centering
+                scene3D.style.display = 'none';
+
+                legend2D.style.display = 'flex';
+                legend3D.style.display = 'none';
+
+                btn2D.classList.add('active');
+                btn3D.classList.remove('active');
+                btn2D.style = '';
+                btn3D.style = '';
+            });
+
+            btn3D.addEventListener('click', () => {
+                scene2D.style.display = 'none';
+                scene3D.style.display = 'block';
+
+                legend2D.style.display = 'none';
+                legend3D.style.display = 'flex';
+
+                if (window.passVisualizer3D) window.passVisualizer3D.handleResize();
+
+                btn3D.classList.add('active');
+                btn2D.classList.remove('active');
+                btn2D.style = '';
+                btn3D.style = '';
+            });
+        }, 500);
+    </script>
+
+</body>
+
+
+<!-- Mirrored from palatine-space.vercel.app/terminal by HTTrack Website Copier/3.x [XR&CO'2014], Mon, 01 Jun 2026 23:32:35 GMT -->
+</html>

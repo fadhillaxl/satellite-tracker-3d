@@ -7,6 +7,16 @@ const nextConfig: NextConfig = {
   turbopack: {},
   allowedDevOrigins: ["localhost:3000", "*.ngrok-free.app", "*.ngrok.io"],
 
+  async rewrites() {
+    return [
+      { source: "/palatine", destination: "/index.html" },
+      { source: "/analyzer", destination: "/analyzer.html" },
+      { source: "/terminal", destination: "/terminal.html" },
+      { source: "/isl-simulations", destination: "/isl-simulations.html" },
+      { source: "/citations", destination: "/citations.html" },
+    ];
+  },
+
 
   webpack(config, { isServer }) {
     if (!isServer) {

@@ -176,6 +176,9 @@ export default function CCTVPage() {
           <Link href="/radio" className="btn-tech" style={{ height: '36px', padding: '0 14px', textDecoration: 'none', color: '#22d3ee', border: '1px solid rgba(0, 242, 254, 0.3)' }}>
             RADIO
           </Link>
+          <Link href="/analyzer" className="btn-tech" style={{ height: '36px', padding: '0 14px', textDecoration: 'none', color: '#a78bfa', border: '1px solid rgba(167, 139, 250, 0.3)' }}>
+            LEO ANALYZER
+          </Link>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <h1 className="tech-font text-base font-bold tracking-wider text-white" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Camera className="w-4 h-4 text-cyan-400" />

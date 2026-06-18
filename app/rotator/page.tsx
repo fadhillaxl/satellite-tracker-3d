@@ -382,6 +382,9 @@ export default function RotatorPage() {
           <Link href="/cctv" className="btn-tech" style={{ height: '34px', padding: '0 14px', gap: '6px', textDecoration: 'none', color: '#00f2fe', border: '1px solid rgba(0, 242, 254, 0.3)' }}>
             CCTV CAMERA
           </Link>
+          <Link href="/analyzer" className="btn-tech" style={{ height: '34px', padding: '0 14px', gap: '6px', textDecoration: 'none', color: '#a78bfa', border: '1px solid rgba(167, 139, 250, 0.3)' }}>
+            LEO ANALYZER
+          </Link>
           <div>
             <h1 className="tech-font" style={{ fontSize: '14px', fontWeight: 700, letterSpacing: '0.12em', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Settings size={15} style={{ color: '#00f2fe' }} />
