@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { Compass, Gauge, Landmark, Orbit, ShieldAlert, Sliders, Timer, TrendingUp, Zap, Radio, Settings, Info } from 'lucide-react';
+import { Compass, Gauge, Landmark, Orbit, ShieldAlert, Sliders, Timer, TrendingUp, Zap, Radio, Settings, Info, Camera, ChevronUp, ChevronDown } from 'lucide-react';
+import CCTVPanel from './CCTVPanel';
 
 interface TelemetryData {
   lat: number;
@@ -240,6 +241,8 @@ export default function TelemetryPanel({
   const [altHistory, setAltHistory] = useState<number[]>([]);
   const [velHistory, setVelHistory] = useState<number[]>([]);
   const [showObserverConfig, setShowObserverConfig] = useState<boolean>(false);
+  const [customFreqStr, setCustomFreqStr] = useState<string | null>(null);
+  const [showCctv, setShowCctv] = useState<boolean>(false);
 
   // Accumulate telemetry history for real-time SVG charts
   useEffect(() => {
@@ -602,6 +605,38 @@ export default function TelemetryPanel({
         </div>
       </div>
 
+      {/* Ground Station CCTV Stream */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '16px' }}>
+        <button
+          onClick={() => setShowCctv(!showCctv)}
+          className="btn-tech"
+          style={{
+            width: '100%',
+            justifyContent: 'space-between',
+            fontSize: '9px',
+            padding: '6px 12px',
+            borderColor: showCctv ? 'rgba(0, 242, 254, 0.4)' : undefined,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Camera className={`w-3.5 h-3.5 ${showCctv ? 'animate-pulse text-cyan-400' : ''}`} />
+            <span>GROUND STATION CCTV</span>
+          </div>
+          {showCctv ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+        </button>
+
+        {showCctv && (
+          <CCTVPanel
+            satName={satData.name}
+            observerLat={observerLat}
+            observerLng={observerLng}
+            observerAlt={observerAlt}
+            lookAngles={lookAngles}
+            compact={true}
+          />
+        )}
+      </div>
+
       {/* Radio Control & Doppler Compensation */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '16px' }}>
         <h3 className="tech-font text-[11px] font-bold text-amber-400/85 tracking-widest uppercase" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -639,9 +674,37 @@ export default function TelemetryPanel({
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px' }}>
             <span style={{ color: 'rgba(255,255,255,0.4)', fontFamily: 'Orbitron', fontSize: '8px' }}>NOMINAL FREQ</span>
-            <span className="mono-font text-primary font-semibold">
-              {(selectedNominalFrequency / 1e6).toFixed(4)} MHz
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <input
+                type="number"
+                step="0.0001"
+                value={customFreqStr !== null ? customFreqStr : (selectedNominalFrequency / 1e6).toFixed(4)}
+                onChange={(e) => {
+                  setCustomFreqStr(e.target.value);
+                  const mhz = parseFloat(e.target.value);
+                  if (!isNaN(mhz) && mhz > 0) {
+                    const hz = Math.round(mhz * 1e6);
+                    setSelectedNominalFrequency(hz);
+                    if (onTuneFrequency) onTuneFrequency(hz);
+                  }
+                }}
+                onBlur={() => {
+                  setCustomFreqStr(null);
+                }}
+                className="input-tech mono-font"
+                style={{
+                  padding: '3px 8px',
+                  fontSize: '11px',
+                  width: '120px',
+                  textAlign: 'right',
+                  color: '#fbbf24',
+                  border: '1px solid rgba(245, 158, 11, 0.3)',
+                  background: 'rgba(2, 6, 23, 0.5)',
+                  borderRadius: '4px',
+                }}
+              />
+              <span className="mono-font text-[10px] text-secondary">MHz</span>
+            </div>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px' }}>

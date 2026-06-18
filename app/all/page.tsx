@@ -40,6 +40,20 @@ export default function AllSatellitesPage() {
     }
   }
 
+  const [observerLat, setObserverLat] = useState<number>(-6.2088);
+  const [observerLng, setObserverLng] = useState<number>(106.8456);
+
+  useEffect(() => {
+    try {
+      const savedLat = localStorage.getItem('observer-lat');
+      const savedLng = localStorage.getItem('observer-lng');
+      if (savedLat) setObserverLat(parseFloat(savedLat));
+      if (savedLng) setObserverLng(parseFloat(savedLng));
+    } catch (e) {
+      console.error('Failed to load observer coordinates from localStorage:', e);
+    }
+  }, []);
+
   useEffect(() => {
     requestAnimationFrame(() => {
       loadSatellites();
@@ -60,6 +74,9 @@ export default function AllSatellitesPage() {
           </Link>
           <Link href="/radio" className="btn-tech flex items-center gap-1.5" style={{ height: '36px', padding: '0 14px', textDecoration: 'none', color: '#22d3ee', border: '1px solid rgba(0, 242, 254, 0.3)' }}>
             RADIO CONFIG
+          </Link>
+          <Link href="/cctv" className="btn-tech flex items-center gap-1.5" style={{ height: '36px', padding: '0 14px', textDecoration: 'none', color: '#22d3ee', border: '1px solid rgba(0, 242, 254, 0.3)' }}>
+            CCTV CAMERA
           </Link>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <h1 className="tech-font text-base font-bold tracking-wider text-white" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -150,7 +167,11 @@ export default function AllSatellitesPage() {
         )}
 
         {!isLoading && !error && satellites.length > 0 && (
-          <GlobeAll3D satellites={satellites} />
+          <GlobeAll3D
+            satellites={satellites}
+            observerLat={observerLat}
+            observerLng={observerLng}
+          />
         )}
       </div>
     </main>

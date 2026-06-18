@@ -38,9 +38,11 @@ interface SatTelemetry {
 
 interface GlobeAll3DProps {
   satellites: SatelliteRaw[];
+  observerLat?: number;
+  observerLng?: number;
 }
 
-export default function GlobeAll3D({ satellites }: GlobeAll3DProps) {
+export default function GlobeAll3D({ satellites, observerLat, observerLng }: GlobeAll3DProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [satrecs, setSatrecs] = useState<(SatrecEntry | null)[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -63,6 +65,8 @@ export default function GlobeAll3D({ satellites }: GlobeAll3DProps) {
     showClouds,
     speedMultiplier,
     isPaused,
+    observerLat,
+    observerLng,
   });
 
   useEffect(() => {
@@ -75,8 +79,10 @@ export default function GlobeAll3D({ satellites }: GlobeAll3DProps) {
       showClouds,
       speedMultiplier,
       isPaused,
+      observerLat,
+      observerLng,
     };
-  }, [satellites, satrecs, searchQuery, selectedSat, showOrbit, showClouds, speedMultiplier, isPaused]);
+  }, [satellites, satrecs, searchQuery, selectedSat, showOrbit, showClouds, speedMultiplier, isPaused, observerLat, observerLng]);
 
   // Keep references to update scene nodes dynamically from loop
   const pointsRef = useRef<THREE.Points | null>(null);
@@ -84,6 +90,13 @@ export default function GlobeAll3D({ satellites }: GlobeAll3DProps) {
   const selectionMarkerRef = useRef<THREE.Mesh | null>(null);
   const cloudMeshRef = useRef<THREE.Mesh | null>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
+
+  // Refs for ground station 3D visuals
+  const stationGroupRef = useRef<THREE.Group | null>(null);
+  const ringRef = useRef<THREE.Mesh | null>(null);
+  const ringMatRef = useRef<THREE.MeshBasicMaterial | null>(null);
+  const beaconRef = useRef<THREE.Mesh | null>(null);
+
 
 
 
@@ -369,6 +382,106 @@ export default function GlobeAll3D({ satellites }: GlobeAll3DProps) {
     scene.add(selectionMarker);
     selectionMarkerRef.current = selectionMarker;
 
+    // --- 11b. Ground Station Marker ---
+    const stationGroup = new THREE.Group();
+    scene.add(stationGroup);
+    stationGroupRef.current = stationGroup;
+
+    const domeGeo = new THREE.SphereGeometry(0.15, 24, 24, 0, Math.PI * 2, 0, Math.PI / 2);
+    const domeMat = new THREE.MeshPhongMaterial({
+      color: 0x00f2fe,
+      emissive: 0x00f2fe,
+      emissiveIntensity: 0.5,
+      transparent: true,
+      opacity: 0.95,
+      shininess: 50
+    });
+    const dome = new THREE.Mesh(domeGeo, domeMat);
+    stationGroup.add(dome);
+
+    const ringGeo = new THREE.RingGeometry(0.2, 0.3, 32);
+    ringGeo.rotateX(-Math.PI / 2);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0x00ff66,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.8
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    stationGroup.add(ring);
+    ringRef.current = ring;
+    ringMatRef.current = ringMat;
+
+    const spireGeo = new THREE.CylinderGeometry(0.01, 0.03, 0.5, 8);
+    spireGeo.translate(0, 0.25, 0);
+    const spireMat = new THREE.MeshPhongMaterial({
+      color: 0x00f2fe,
+      emissive: 0x00f2fe,
+      emissiveIntensity: 0.5
+    });
+    const spire = new THREE.Mesh(spireGeo, spireMat);
+    stationGroup.add(spire);
+
+    const beaconGeo = new THREE.SphereGeometry(0.04, 8, 8);
+    const beaconMat = new THREE.MeshBasicMaterial({
+      color: 0xff007f,
+    });
+    const beacon = new THREE.Mesh(beaconGeo, beaconMat);
+    beacon.position.y = 0.5;
+    stationGroup.add(beacon);
+    beaconRef.current = beacon;
+
+    // Dome coverage footprint dome (translucent)
+    const coverageGeo = new THREE.SphereGeometry(0.8, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+    const coverageMat = new THREE.MeshPhongMaterial({
+      color: 0x00f2fe,
+      transparent: true,
+      opacity: 0.08,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    const coverageMesh = new THREE.Mesh(coverageGeo, coverageMat);
+    stationGroup.add(coverageMesh);
+
+    // Dome grid/wireframe (cyberpunk HUD style)
+    const coverageWireframeMat = new THREE.MeshBasicMaterial({
+      color: 0x00f2fe,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.2,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    const coverageWireframe = new THREE.Mesh(coverageGeo, coverageWireframeMat);
+    stationGroup.add(coverageWireframe);
+
+    // Vertical signal light beam
+    const beamGeo = new THREE.CylinderGeometry(0.01, 0.15, 1.8, 16, 1, true);
+    beamGeo.translate(0, 0.9, 0);
+    const beamMat = new THREE.MeshBasicMaterial({
+      color: 0x00ff66,
+      transparent: true,
+      opacity: 0.25,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    const beam = new THREE.Mesh(beamGeo, beamMat);
+    stationGroup.add(beam);
+
+    // Helper to position and rotate the ground station to align with Earth surface normal
+    const updateStationGroupPosition = (lat: number, lng: number) => {
+      const pos = latLngAltToVector3(lat, lng, 0);
+      stationGroup.position.set(pos.x, pos.y, pos.z);
+      const normal = new THREE.Vector3(pos.x, pos.y, pos.z).normalize();
+      const up = new THREE.Vector3(0, 1, 0);
+      const quaternion = new THREE.Quaternion().setFromUnitVectors(up, normal);
+      stationGroup.setRotationFromQuaternion(quaternion);
+    };
+
+    // Position initially
+    updateStationGroupPosition(stateRef.current.observerLat ?? -6.2088, stateRef.current.observerLng ?? 106.8456);
+
     // --- 12. Clock & Dynamic Propagation Loop ---
     let animationFrameId: number;
     let lastPropagationTime = 0;
@@ -387,6 +500,22 @@ export default function GlobeAll3D({ satellites }: GlobeAll3DProps) {
       // Cloud rotation
       if (cloudMesh) {
         cloudMesh.rotation.y += 0.00028;
+      }
+
+      // Ground station ring and beacon animation
+      if (ring && ringMat) {
+        const pulseVal = (time / 1000) % 2; // 2 seconds cycle
+        ring.scale.set(1 + pulseVal * 2.5, 1, 1 + pulseVal * 2.5);
+        ringMat.opacity = 0.8 * (1 - pulseVal / 2);
+      }
+      if (beacon) {
+        const blink = Math.floor(time / 250) % 2 === 0;
+        beacon.visible = blink;
+      }
+      if (beam && beamMat) {
+        beam.scale.x = 1 + 0.15 * Math.sin(time / 150);
+        beam.scale.z = 1 + 0.15 * Math.sin(time / 150);
+        beamMat.opacity = 0.18 + 0.08 * Math.sin(time / 150);
       }
 
       const state = stateRef.current;
@@ -715,10 +844,24 @@ export default function GlobeAll3D({ satellites }: GlobeAll3DProps) {
     const handleMouseMove = (e: MouseEvent) => {
       getMouseCoords(e);
       raycaster.setFromCamera(mouse, camera);
-      const intersects = raycaster.intersectObject(pointCloud);
 
       const tooltip = tooltipRef.current;
       if (!tooltip) return;
+
+      // Check intersection with ground station dome
+      const stationIntersects = raycaster.intersectObject(dome);
+      if (stationIntersects.length > 0) {
+        tooltip.style.display = 'block';
+        tooltip.style.left = `${e.clientX + 15}px`;
+        tooltip.style.top = `${e.clientY + 15}px`;
+        const obsLat = stateRef.current.observerLat ?? -6.2088;
+        const obsLng = stateRef.current.observerLng ?? 106.8456;
+        tooltip.innerHTML = `<div style="text-align: center;"><span style="color: #00f2fe; font-weight: bold; text-transform: uppercase; letter-spacing: 0.05em;">STATION LOCATION</span><br/><span style="color: #00ff66;">Lat: ${obsLat.toFixed(4)}°</span><br/><span style="color: #00ff66;">Lng: ${obsLng.toFixed(4)}°</span></div>`;
+        document.body.style.cursor = 'pointer';
+        return;
+      }
+
+      const intersects = raycaster.intersectObject(pointCloud);
 
       if (intersects.length > 0) {
         const idx = intersects[0].index;
@@ -793,6 +936,21 @@ export default function GlobeAll3D({ satellites }: GlobeAll3DProps) {
       markerGeom.dispose();
       markerMat.dispose();
 
+      domeGeo.dispose();
+      domeMat.dispose();
+      ringGeo.dispose();
+      ringMat.dispose();
+      spireGeo.dispose();
+      spireMat.dispose();
+      beaconGeo.dispose();
+      beaconMat.dispose();
+
+      coverageGeo.dispose();
+      coverageMat.dispose();
+      coverageWireframeMat.dispose();
+      beamGeo.dispose();
+      beamMat.dispose();
+
       earthDayTex.dispose();
       earthBumpTex.dispose();
       earthSpecularTex.dispose();
@@ -803,6 +961,17 @@ export default function GlobeAll3D({ satellites }: GlobeAll3DProps) {
       renderer.dispose();
     };
   }, [satellites]);
+
+  useEffect(() => {
+    if (stationGroupRef.current && observerLat !== undefined && observerLng !== undefined) {
+      const pos = latLngAltToVector3(observerLat, observerLng, 0);
+      stationGroupRef.current.position.set(pos.x, pos.y, pos.z);
+      const normal = new THREE.Vector3(pos.x, pos.y, pos.z).normalize();
+      const up = new THREE.Vector3(0, 1, 0);
+      const quaternion = new THREE.Quaternion().setFromUnitVectors(up, normal);
+      stationGroupRef.current.setRotationFromQuaternion(quaternion);
+    }
+  }, [observerLat, observerLng]);
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', minHeight: '500px' }}>

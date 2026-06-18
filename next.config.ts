@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
   output: "standalone",
   basePath: process.env.NEXT_PUBLIC_BASE_PATH || undefined,
   turbopack: {},
+  allowedDevOrigins: ["localhost:3000", "*.ngrok-free.app", "*.ngrok.io"],
 
 
   webpack(config, { isServer }) {

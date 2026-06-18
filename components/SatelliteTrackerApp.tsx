@@ -80,6 +80,31 @@ export default function SatelliteTrackerApp({ initialNoradId }: AppProps) {
   const [observerLat, setObserverLat] = useState<number>(-6.2088);
   const [observerLng, setObserverLng] = useState<number>(106.8456);
   const [observerAlt, setObserverAlt] = useState<number>(10); // meters
+
+  // Load ground station from localStorage on mount
+  useEffect(() => {
+    try {
+      const savedLat = localStorage.getItem('observer-lat');
+      const savedLng = localStorage.getItem('observer-lng');
+      const savedAlt = localStorage.getItem('observer-alt');
+      if (savedLat) setObserverLat(parseFloat(savedLat));
+      if (savedLng) setObserverLng(parseFloat(savedLng));
+      if (savedAlt) setObserverAlt(parseFloat(savedAlt));
+    } catch (e) {
+      console.error('Failed to load observer coordinates from localStorage:', e);
+    }
+  }, []);
+
+  // Save ground station to localStorage when updated
+  useEffect(() => {
+    try {
+      localStorage.setItem('observer-lat', observerLat.toString());
+      localStorage.setItem('observer-lng', observerLng.toString());
+      localStorage.setItem('observer-alt', observerAlt.toString());
+    } catch (e) {
+      console.error('Failed to save observer coordinates to localStorage:', e);
+    }
+  }, [observerLat, observerLng, observerAlt]);
   
   // Look Angles State
   const [lookAngles, setLookAngles] = useState<{ azimuth: number; elevation: number; range: number } | null>(null);
@@ -555,6 +580,9 @@ export default function SatelliteTrackerApp({ initialNoradId }: AppProps) {
                     satelliteName={satData.name}
                     telemetry={telemetry}
                     orbitPoints={orbitPoints}
+                    observerLat={observerLat}
+                    observerLng={observerLng}
+                    lookAngles={lookAngles}
                   />
               </div>
 
@@ -589,6 +617,13 @@ export default function SatelliteTrackerApp({ initialNoradId }: AppProps) {
                       style={{ fontSize: '10px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', border: '1px solid rgba(0, 242, 254, 0.3)' }}
                     >
                       RADIO
+                    </Link>
+                    <Link
+                      href="/cctv"
+                      className="btn-tech text-cyan-400"
+                      style={{ fontSize: '10px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', border: '1px solid rgba(0, 242, 254, 0.3)' }}
+                    >
+                      CCTV
                     </Link>
                   </div>
 
