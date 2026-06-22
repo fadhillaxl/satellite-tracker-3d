@@ -78,7 +78,7 @@ export default function AllSatellitesPage() {
           <Link href="/cctv" className="btn-tech flex items-center gap-1.5" style={{ height: '36px', padding: '0 14px', textDecoration: 'none', color: '#22d3ee', border: '1px solid rgba(0, 242, 254, 0.3)' }}>
             CCTV CAMERA
           </Link>
-          <Link href="/analyzer" className="btn-tech flex items-center gap-1.5" style={{ height: '36px', padding: '0 14px', textDecoration: 'none', color: '#a78bfa', border: '1px solid rgba(167, 139, 250, 0.3)' }}>
+          <Link href="/leo" className="btn-tech flex items-center gap-1.5" style={{ height: '36px', padding: '0 14px', textDecoration: 'none', color: '#a78bfa', border: '1px solid rgba(167, 139, 250, 0.3)' }}>
             LEO ANALYZER
           </Link>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
