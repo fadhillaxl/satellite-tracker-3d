@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
-import { Play, Pause, VolumeX, Volume2, RefreshCw, Radio, Camera, ShieldAlert, Cpu } from 'lucide-react';
+import { Play, Pause, VolumeX, Volume2, RefreshCw, Camera, ShieldAlert, Cpu } from 'lucide-react';
 
 interface CCTVPanelProps {
   satName?: string;
@@ -44,10 +44,11 @@ export default function CCTVPanel({
     if (onLog) onLog(msg);
   };
 
-  const warn = (msg: string, details?: any) => {
+  const warn = (msg: string, details?: { message?: string; details?: string } | null | undefined | unknown) => {
     console.warn(msg, details);
     if (onLog) {
-      const detailStr = details ? ` (${details.message || details.details || JSON.stringify(details)})` : '';
+      const d = details as { message?: string; details?: string } | null | undefined;
+      const detailStr = d ? ` (${d.message || d.details || JSON.stringify(d)})` : '';
       onLog(`[WARN] ${msg}${detailStr}`);
     }
   };
@@ -130,7 +131,7 @@ export default function CCTVPanel({
             log('[CCTV] Playback started successfully.');
             setIsPlaying(true);
           })
-          .catch((err) => {
+          .catch((err: unknown) => {
             warn('[CCTV] Autoplay prevented, waiting for user interaction:', err);
             setIsPlaying(false);
           });
@@ -142,7 +143,7 @@ export default function CCTVPanel({
       log('[CCTV] Attaching media element...');
       hls.attachMedia(video);
 
-      hls.on(Hls.Events.ERROR, (event, data) => {
+      hls.on(Hls.Events.ERROR, (event: string, data: { fatal: boolean; type: string; details?: string }) => {
         warn('[CCTV HLS Error]', data);
         if (data.fatal) {
           switch (data.type) {
@@ -177,13 +178,13 @@ export default function CCTVPanel({
         video.play().then(() => {
           log('[CCTV] Native player: playback started.');
           setIsPlaying(true);
-        }).catch((e) => {
+        }).catch((e: unknown) => {
           warn('[CCTV] Native player: play() blocked. Autoplay policy active:', e);
           setIsPlaying(false);
         });
       };
       
-      const handleError = (e: any) => {
+      const handleError = (e: unknown) => {
         warn('[CCTV] Native player error event:', e);
         setStreamStatus('offline');
         setErrorMsg('Ground Station feed offline or camera unreachable.');
@@ -214,6 +215,7 @@ export default function CCTVPanel({
         hlsRef.current = null;
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [streamUrl, retryCount, useRawPlayer]);
 
   const togglePlay = () => {
