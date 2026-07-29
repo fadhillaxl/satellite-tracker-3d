@@ -24,7 +24,7 @@ export default function CCTVPanel({
   onLog,
 }: CCTVPanelProps) {
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
-  const streamUrl = `${basePath}/cctv/stream.m3u8`;
+  const streamUrl = `${basePath}/cctv/index.m3u8`;
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);

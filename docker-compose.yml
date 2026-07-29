@@ -9,6 +9,8 @@ services:
     ports:
       - "3003:3003"   # Next.js HTTP
       - "3004:3004"   # WebSocket bridge (for local-agent connection)
+    volumes:
+      - ./public/cctv:/app/public/cctv
     environment:
       - NODE_ENV=production
       - NEXT_TELEMETRY_DISABLED=1
